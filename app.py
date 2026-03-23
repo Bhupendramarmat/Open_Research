@@ -71,6 +71,7 @@ class PaperResponse(BaseModel):
     title: str
     authors: str
     abstract: str
+    detailed_summary: str
     url: str
     year: str
     source: str
@@ -79,6 +80,8 @@ class PaperResponse(BaseModel):
 class SourceSummary(BaseModel):
     semantic_scholar: int
     pubmed: int
+    europe_pmc: int
+    crossref: int
     both_sources_used: bool
 
 
@@ -120,7 +123,7 @@ async def search(request: SearchRequest):
                 detail="No papers found for this query. Try rephrasing.",
             )
 
-        answer = process_query(query=request.query, papers=papers)
+        answer, detailed_summaries = process_query(query=request.query, papers=papers)
 
         return SearchResponse(
             answer=answer,
@@ -129,16 +132,19 @@ async def search(request: SearchRequest):
                     title=p["title"],
                     authors=p["authors"],
                     abstract=p["abstract"],
+                    detailed_summary=(detailed_summaries[idx] if idx < len(detailed_summaries) else ""),
                     url=p["url"],
                     year=str(p.get("year", "N/A")),
                     source=str(p.get("source", "unknown")),
                 )
-                for p in papers
+                for idx, p in enumerate(papers)
             ],
             query=request.query,
             source_summary=SourceSummary(
                 semantic_scholar=int(source_summary.get("semantic_scholar", 0)),
                 pubmed=int(source_summary.get("pubmed", 0)),
+                europe_pmc=int(source_summary.get("europe_pmc", 0)),
+                crossref=int(source_summary.get("crossref", 0)),
                 both_sources_used=bool(source_summary.get("both_sources_used", False)),
             ),
         )

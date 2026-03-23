@@ -8,6 +8,8 @@ import { Moon, Sun, GraduationCap, Sparkles, BookOpen, Cpu, Database, BrainCircu
 import { toast } from "sonner";
 
 type AppState = "idle" | "loading" | "results";
+const DEFAULT_NUM_PAPERS = 20;
+const SEARCH_TIMEOUT_MS = 170000;
 
 const SUGGESTED_QUERIES = [
   "How does machine learning improve medical imaging?",
@@ -21,6 +23,7 @@ const Index = () => {
   const [isDark, setIsDark] = useState(false);
   const [answer, setAnswer] = useState<string>("");
   const [papers, setPapers] = useState<any[]>([]);
+  const [sourceSummary, setSourceSummary] = useState<any | null>(null);
 
   const toggleTheme = () => {
     setIsDark(!isDark);
@@ -29,13 +32,17 @@ const Index = () => {
 
   const handleSearch = async (query: string) => {
     setState("loading");
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), SEARCH_TIMEOUT_MS);
+
     try {
       const res = await fetch("http://localhost:8000/api/search", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        signal: controller.signal,
         body: JSON.stringify({
           query,
-          num_papers: 6,
+          num_papers: DEFAULT_NUM_PAPERS,
           year_range: "2018-2025",
           peer_reviewed_only: true,
         }),
@@ -49,11 +56,18 @@ const Index = () => {
       const data = await res.json();
       setAnswer(data.answer);
       setPapers(data.papers);
+      setSourceSummary(data.source_summary ?? null);
       setState("results");
     } catch (err: any) {
       console.error(err);
-      toast.error(err.message || "An error occurred fetching results");
+      if (err?.name === "AbortError") {
+        toast.error("Search timed out after 170 seconds. Please try a shorter query.");
+      } else {
+        toast.error(err.message || "An error occurred fetching results");
+      }
       setState("idle");
+    } finally {
+      clearTimeout(timeoutId);
     }
   };
 
@@ -134,7 +148,7 @@ const Index = () => {
           {state === "results" && (
             <>
               <AnswerDisplay answer={answer} />
-              <SourcePapers papers={papers} />
+              <SourcePapers papers={papers} sourceSummary={sourceSummary} />
             </>
           )}
 

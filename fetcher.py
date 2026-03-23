@@ -4,6 +4,7 @@ OpenResearch — Multi-source Paper Fetcher
 Fetches papers in parallel from:
 1) Semantic Scholar Academic Graph API
 2) PubMed (NCBI E-utilities)
+3) Europe PMC REST API
 
 Returns a single merged, deduplicated, ranked list of papers.
 """
@@ -13,6 +14,7 @@ import re
 import threading
 import time
 import xml.etree.ElementTree as ET
+from html import unescape
 from concurrent.futures import ThreadPoolExecutor
 from collections import Counter
 
@@ -22,6 +24,8 @@ import requests
 SEMANTIC_SCHOLAR_API = "https://api.semanticscholar.org/graph/v1/paper/search"
 PUBMED_ESEARCH_API = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi"
 PUBMED_EFETCH_API = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi"
+EUROPE_PMC_SEARCH_API = "https://www.ebi.ac.uk/europepmc/webservices/rest/search"
+CROSSREF_WORKS_API = "https://api.crossref.org/works"
 
 FIELDS = "title,authors,abstract,url,year,citationCount,openAccessPdf"
 
@@ -432,6 +436,181 @@ def fetch_pubmed_papers(query: str, limit: int = 5) -> list[dict]:
     return all_papers[: max(limit * 3, limit)]
 
 
+def _europe_pmc_result_url(record: dict) -> str:
+    source = (record.get("source") or "").strip()
+    record_id = (record.get("id") or "").strip()
+    doi = (record.get("doi") or "").strip()
+
+    if source and record_id:
+        return f"https://europepmc.org/article/{source}/{record_id}"
+    if doi:
+        return f"https://doi.org/{doi}"
+    return "https://europepmc.org/"
+
+
+def fetch_europe_pmc_papers(query: str, limit: int = 5) -> list[dict]:
+    """Fetch papers from Europe PMC REST API (JSON)."""
+    all_papers: list[dict] = []
+    candidates = _build_query_candidates(query)
+    request_limit = min(100, max(limit * 3, 15))
+
+    for candidate_query in candidates:
+        params = {
+            "query": candidate_query,
+            "format": "json",
+            "pageSize": request_limit,
+            "resultType": "core",
+        }
+
+        try:
+            response = requests.get(EUROPE_PMC_SEARCH_API, params=params, timeout=20)
+            response.raise_for_status()
+            data = response.json()
+        except requests.RequestException as e:
+            print(f"❌ Europe PMC API error for query '{candidate_query}': {e}")
+            continue
+        except ValueError as e:
+            print(f"❌ Europe PMC JSON parse error for query '{candidate_query}': {e}")
+            continue
+
+        records = data.get("resultList", {}).get("result", [])
+
+        for record in records:
+            abstract = (record.get("abstractText") or "").strip()
+            if not abstract:
+                continue
+
+            title = (record.get("title") or "Untitled").strip()
+            if _is_retracted(title, abstract):
+                continue
+
+            authors = (record.get("authorString") or "Unknown").strip()
+            citation_count = _safe_int(record.get("citedByCount"))
+            year = str(record.get("pubYear") or "N/A")
+
+            all_papers.append(
+                {
+                    "title": title,
+                    "authors": authors,
+                    "abstract": abstract,
+                    "url": _europe_pmc_result_url(record),
+                    "year": year,
+                    "citation_count": citation_count,
+                    "source": "europe_pmc",
+                }
+            )
+
+        all_papers = _dedupe_by_title(all_papers)
+        if len(all_papers) >= limit:
+            break
+
+    print(f"🌍 Europe PMC: fetched {len(all_papers)} papers")
+    return all_papers[: max(limit * 3, limit)]
+
+
+def _crossref_headers() -> dict[str, str]:
+    contact_email = (os.getenv("CROSSREF_EMAIL") or os.getenv("OPENRESEARCH_CONTACT_EMAIL") or "").strip()
+    if contact_email:
+        return {"User-Agent": f"OpenResearch/1.0 (mailto:{contact_email})"}
+    return {"User-Agent": "OpenResearch/1.0"}
+
+
+def _crossref_year(item: dict) -> str:
+    for field in ("issued", "published-print", "published-online", "created"):
+        date_parts = item.get(field, {}).get("date-parts", [])
+        if date_parts and date_parts[0]:
+            return str(date_parts[0][0])
+    return "N/A"
+
+
+def _crossref_authors(item: dict) -> str:
+    authors = []
+    for author in item.get("author", []):
+        given = (author.get("given") or "").strip()
+        family = (author.get("family") or "").strip()
+        full_name = f"{given} {family}".strip()
+        if full_name:
+            authors.append(full_name)
+
+    if not authors:
+        return "Unknown"
+    if len(authors) <= 3:
+        return ", ".join(authors)
+    return f"{authors[0]} et al."
+
+
+def _crossref_clean_abstract(text: str) -> str:
+    if not text:
+        return ""
+    normalized = unescape(text)
+    normalized = re.sub(r"<jats:[^>]+>", "", normalized)
+    normalized = re.sub(r"</jats:[^>]+>", "", normalized)
+    normalized = re.sub(r"<[^>]+>", " ", normalized)
+    return " ".join(normalized.split()).strip()
+
+
+def fetch_crossref_papers(query: str, limit: int = 5) -> list[dict]:
+    """Fetch papers from Crossref REST API."""
+    all_papers: list[dict] = []
+    candidates = _build_query_candidates(query)
+    request_limit = min(100, max(limit * 3, 15))
+    headers = _crossref_headers()
+
+    for candidate_query in candidates:
+        params = {
+            "query.bibliographic": candidate_query,
+            "rows": request_limit,
+            "select": "DOI,title,author,issued,published-print,published-online,created,is-referenced-by-count,abstract,URL",
+        }
+
+        try:
+            response = requests.get(CROSSREF_WORKS_API, params=params, headers=headers, timeout=25)
+            response.raise_for_status()
+            data = response.json()
+        except requests.RequestException as e:
+            print(f"❌ Crossref API error for query '{candidate_query}': {e}")
+            continue
+        except ValueError as e:
+            print(f"❌ Crossref JSON parse error for query '{candidate_query}': {e}")
+            continue
+
+        items = data.get("message", {}).get("items", [])
+
+        for item in items:
+            title_list = item.get("title") or []
+            title = (title_list[0] if title_list else "Untitled").strip()
+            abstract = _crossref_clean_abstract(item.get("abstract") or "")
+            if not abstract:
+                continue
+
+            if _is_retracted(title, abstract):
+                continue
+
+            doi = (item.get("DOI") or "").strip()
+            url = (item.get("URL") or "").strip()
+            if not url and doi:
+                url = f"https://doi.org/{doi}"
+
+            all_papers.append(
+                {
+                    "title": title,
+                    "authors": _crossref_authors(item),
+                    "abstract": abstract,
+                    "url": url or "https://www.crossref.org/",
+                    "year": _crossref_year(item),
+                    "citation_count": _safe_int(item.get("is-referenced-by-count")),
+                    "source": "crossref",
+                }
+            )
+
+        all_papers = _dedupe_by_title(all_papers)
+        if len(all_papers) >= limit:
+            break
+
+    print(f"🧷 Crossref: fetched {len(all_papers)} papers")
+    return all_papers[: max(limit * 3, limit)]
+
+
 def _merge_rank_dedupe(papers: list[dict], limit: int) -> list[dict]:
     ranked = sorted(papers, key=_rank_key, reverse=True)
     deduped = []
@@ -454,7 +633,12 @@ def _merge_rank_dedupe(papers: list[dict], limit: int) -> list[dict]:
 def _merge_rank_dedupe_with_query(papers: list[dict], limit: int, query: str) -> list[dict]:
     ranked = _dedupe_by_title_with_query(papers, query)
 
-    by_source: dict[str, list[dict]] = {"semantic_scholar": [], "pubmed": []}
+    by_source: dict[str, list[dict]] = {
+        "semantic_scholar": [],
+        "pubmed": [],
+        "europe_pmc": [],
+        "crossref": [],
+    }
     for paper in ranked:
         src = paper.get("source")
         if src in by_source:
@@ -463,7 +647,7 @@ def _merge_rank_dedupe_with_query(papers: list[dict], limit: int, query: str) ->
     selected: list[dict] = []
     selected_titles: set[str] = set()
 
-    for src in ("semantic_scholar", "pubmed"):
+    for src in ("semantic_scholar", "pubmed", "europe_pmc", "crossref"):
         if by_source[src] and len(selected) < limit:
             top_paper = by_source[src][0]
             title_key = _normalize_title(top_paper.get("title", ""))
@@ -486,27 +670,38 @@ def _merge_rank_dedupe_with_query(papers: list[dict], limit: int, query: str) ->
 
 def fetch_papers(query: str, limit: int = 5) -> tuple[list[dict], dict[str, int | bool]]:
     """
-    Fetch academic papers from Semantic Scholar and PubMed in parallel,
+    Fetch academic papers from Semantic Scholar, PubMed, Europe PMC, and Crossref in parallel,
     then merge, dedupe, rank, and cap to the requested limit.
     """
-    with ThreadPoolExecutor(max_workers=2) as executor:
+    with ThreadPoolExecutor(max_workers=4) as executor:
         semantic_future = executor.submit(fetch_semantic_papers, query, limit)
         pubmed_future = executor.submit(fetch_pubmed_papers, query, limit)
+        europe_pmc_future = executor.submit(fetch_europe_pmc_papers, query, limit)
+        crossref_future = executor.submit(fetch_crossref_papers, query, limit)
 
         semantic_papers = semantic_future.result()
         pubmed_papers = pubmed_future.result()
+        europe_pmc_papers = europe_pmc_future.result()
+        crossref_papers = crossref_future.result()
 
-    combined = semantic_papers + pubmed_papers
+    combined = semantic_papers + pubmed_papers + europe_pmc_papers + crossref_papers
     final_papers = _merge_rank_dedupe_with_query(combined, limit, query)
+    sources_with_hits = sum(
+        1
+        for count in (len(semantic_papers), len(pubmed_papers), len(europe_pmc_papers), len(crossref_papers))
+        if count > 0
+    )
     source_summary: dict[str, int | bool] = {
         "semantic_scholar": len(semantic_papers),
         "pubmed": len(pubmed_papers),
-        "both_sources_used": len(semantic_papers) > 0 and len(pubmed_papers) > 0,
+        "europe_pmc": len(europe_pmc_papers),
+        "crossref": len(crossref_papers),
+        "both_sources_used": sources_with_hits >= 2,
     }
 
     print(
         f"📚 Combined fetched {len(combined)} papers "
-        f"(Semantic Scholar={len(semantic_papers)}, PubMed={len(pubmed_papers)}), "
+        f"(Semantic Scholar={len(semantic_papers)}, PubMed={len(pubmed_papers)}, Europe PMC={len(europe_pmc_papers)}, Crossref={len(crossref_papers)}), "
         f"returning {len(final_papers)}"
     )
     return final_papers, source_summary

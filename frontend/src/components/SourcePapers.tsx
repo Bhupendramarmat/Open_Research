@@ -6,12 +6,15 @@ export interface Paper {
   year: string;
   url: string;
   abstract?: string;
+  detailed_summary?: string;
   source?: string;
 }
 
 export interface SourceSummary {
   semantic_scholar: number;
   pubmed: number;
+  europe_pmc: number;
+  crossref: number;
   both_sources_used: boolean;
 }
 
@@ -37,7 +40,7 @@ const SourcePapers = ({
 
       {sourceSummary && (
         <div className="mb-4 text-xs text-muted-foreground bg-secondary/70 rounded-lg px-3 py-2 border border-border/50">
-          Sources used: Semantic Scholar {sourceSummary.semantic_scholar} · PubMed {sourceSummary.pubmed}
+          Sources used: Semantic Scholar {sourceSummary.semantic_scholar} · PubMed {sourceSummary.pubmed} · Europe PMC {sourceSummary.europe_pmc} · Crossref {sourceSummary.crossref}
           {!sourceSummary.both_sources_used && " · Only one source had matches for this query."}
         </div>
       )}
@@ -73,10 +76,24 @@ const SourcePapers = ({
                 </span>
                 {paper.source && (
                   <span className="text-[10px] uppercase tracking-wide text-primary font-semibold bg-primary/10 px-2 py-0.5 rounded-full">
-                    {paper.source === "semantic_scholar" ? "Semantic Scholar" : paper.source === "pubmed" ? "PubMed" : paper.source}
+                    {paper.source === "semantic_scholar"
+                      ? "Semantic Scholar"
+                      : paper.source === "pubmed"
+                      ? "PubMed"
+                      : paper.source === "europe_pmc"
+                      ? "Europe PMC"
+                      : paper.source === "crossref"
+                      ? "Crossref"
+                      : paper.source}
                   </span>
                 )}
               </div>
+
+              {paper.detailed_summary && (
+                <p className="mt-2 text-sm leading-relaxed text-secondary-foreground/90 whitespace-pre-line">
+                  {paper.detailed_summary}
+                </p>
+              )}
             </div>
           </div>
         ))}
