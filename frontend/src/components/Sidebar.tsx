@@ -27,7 +27,7 @@ const Sidebar = ({
           <h3 className="font-semibold text-sm text-foreground">How It Works</h3>
         </div>
         <p className="text-xs text-muted-foreground leading-relaxed">
-          Powered by <strong className="text-foreground">Semantic Scholar + PubMed</strong> for paper retrieval and <strong className="text-foreground">Gemini 1.5 Flash</strong> for AI synthesis. All answers are grounded in real academic abstracts — zero hallucination.
+          Powered by <strong className="text-foreground">Semantic Scholar + PubMed + Europe PMC + Crossref</strong> for paper retrieval and <strong className="text-foreground">Gemini 1.5 Flash</strong> for AI synthesis. All answers are grounded in real academic abstracts — zero hallucination.
         </p>
 
         <div className="mt-4 grid grid-cols-2 gap-2">
@@ -59,14 +59,14 @@ const Sidebar = ({
             <input
               type="range"
               min={1}
-              max={50}
+              max={150}
               value={numPapers}
               onChange={(e) => onNumPapersChange(Number(e.target.value))}
               className="w-full accent-primary h-1.5 rounded-full cursor-pointer"
             />
             <div className="flex justify-between text-[10px] text-muted-foreground mt-1">
               <span>1</span>
-              <span>50</span>
+              <span>150</span>
             </div>
           </div>
 

@@ -62,7 +62,7 @@ app.add_middleware(
 # ── Request / Response schemas ────────────────────────────────────────
 class SearchRequest(BaseModel):
     query: str = Field(..., min_length=3, max_length=500, description="Academic query")
-    num_papers: int = Field(20, ge=1, le=50, description="Number of papers to fetch")
+    num_papers: int = Field(20, ge=1, le=150, description="Number of papers to fetch")
     year_range: str = Field("2018-2025", description="Year range filter")
     peer_reviewed_only: bool = Field(True, description="Filter to peer-reviewed papers only")
 

@@ -28,6 +28,9 @@ EUROPE_PMC_SEARCH_API = "https://www.ebi.ac.uk/europepmc/webservices/rest/search
 CROSSREF_WORKS_API = "https://api.crossref.org/works"
 
 FIELDS = "title,authors,abstract,url,year,citationCount,openAccessPdf"
+SOURCE_POOL_MULTIPLIER = 3
+MIN_SOURCE_POOL = 30
+MAX_SOURCE_POOL = 90
 
 # Global lock and state for Semantic Scholar rate limiting (1 request / second)
 _s2_lock = threading.Lock()
@@ -71,6 +74,10 @@ def _safe_int(value) -> int:
         return int(value)
     except (TypeError, ValueError):
         return 0
+
+
+def _source_pool_target(limit: int) -> int:
+    return min(MAX_SOURCE_POOL, max(limit * SOURCE_POOL_MULTIPLIER, MIN_SOURCE_POOL))
 
 
 def _normalize_title(title: str) -> str:
@@ -237,7 +244,8 @@ def fetch_semantic_papers(query: str, limit: int = 5) -> list[dict]:
 
     all_papers: list[dict] = []
     candidates = _build_query_candidates(query)
-    request_limit = min(100, max(limit * 3, 15))
+    target_pool = _source_pool_target(limit)
+    request_limit = min(100, max(target_pool, 20))
 
     for candidate_query in candidates:
         params = {
@@ -298,11 +306,11 @@ def fetch_semantic_papers(query: str, limit: int = 5) -> list[dict]:
             )
 
         all_papers = _dedupe_by_title(all_papers)
-        if len(all_papers) >= limit:
+        if len(all_papers) >= target_pool:
             break
 
     print(f"📚 Semantic Scholar: fetched {len(all_papers)} papers")
-    return all_papers[: max(limit * 3, limit)]
+    return all_papers[:target_pool]
 
 
 def _extract_pubmed_year(article: ET.Element) -> str:
@@ -361,6 +369,8 @@ def fetch_pubmed_papers(query: str, limit: int = 5) -> list[dict]:
 
     all_papers: list[dict] = []
     candidates = _build_query_candidates(query)
+    target_pool = _source_pool_target(limit)
+    request_limit = min(100, max(target_pool, 20))
 
     for candidate_query in candidates:
         search_params = {
@@ -368,7 +378,7 @@ def fetch_pubmed_papers(query: str, limit: int = 5) -> list[dict]:
             "term": candidate_query,
             "retmode": "json",
             "sort": "relevance",
-            "retmax": min(100, max(limit * 3, 15)),
+            "retmax": request_limit,
         }
         if api_key:
             search_params["api_key"] = api_key
@@ -429,11 +439,11 @@ def fetch_pubmed_papers(query: str, limit: int = 5) -> list[dict]:
             )
 
         all_papers = _dedupe_by_title(all_papers)
-        if len(all_papers) >= limit:
+        if len(all_papers) >= target_pool:
             break
 
     print(f"🧪 PubMed: fetched {len(all_papers)} papers")
-    return all_papers[: max(limit * 3, limit)]
+    return all_papers[:target_pool]
 
 
 def _europe_pmc_result_url(record: dict) -> str:
@@ -452,7 +462,8 @@ def fetch_europe_pmc_papers(query: str, limit: int = 5) -> list[dict]:
     """Fetch papers from Europe PMC REST API (JSON)."""
     all_papers: list[dict] = []
     candidates = _build_query_candidates(query)
-    request_limit = min(100, max(limit * 3, 15))
+    target_pool = _source_pool_target(limit)
+    request_limit = min(100, max(target_pool, 20))
 
     for candidate_query in candidates:
         params = {
@@ -501,11 +512,11 @@ def fetch_europe_pmc_papers(query: str, limit: int = 5) -> list[dict]:
             )
 
         all_papers = _dedupe_by_title(all_papers)
-        if len(all_papers) >= limit:
+        if len(all_papers) >= target_pool:
             break
 
     print(f"🌍 Europe PMC: fetched {len(all_papers)} papers")
-    return all_papers[: max(limit * 3, limit)]
+    return all_papers[:target_pool]
 
 
 def _crossref_headers() -> dict[str, str]:
@@ -553,7 +564,8 @@ def fetch_crossref_papers(query: str, limit: int = 5) -> list[dict]:
     """Fetch papers from Crossref REST API."""
     all_papers: list[dict] = []
     candidates = _build_query_candidates(query)
-    request_limit = min(100, max(limit * 3, 15))
+    target_pool = _source_pool_target(limit)
+    request_limit = min(100, max(target_pool, 20))
     headers = _crossref_headers()
 
     for candidate_query in candidates:
@@ -604,11 +616,11 @@ def fetch_crossref_papers(query: str, limit: int = 5) -> list[dict]:
             )
 
         all_papers = _dedupe_by_title(all_papers)
-        if len(all_papers) >= limit:
+        if len(all_papers) >= target_pool:
             break
 
     print(f"🧷 Crossref: fetched {len(all_papers)} papers")
-    return all_papers[: max(limit * 3, limit)]
+    return all_papers[:target_pool]
 
 
 def _merge_rank_dedupe(papers: list[dict], limit: int) -> list[dict]:
@@ -646,13 +658,24 @@ def _merge_rank_dedupe_with_query(papers: list[dict], limit: int, query: str) ->
 
     selected: list[dict] = []
     selected_titles: set[str] = set()
+    ordered_sources = ("semantic_scholar", "pubmed", "europe_pmc", "crossref")
 
-    for src in ("semantic_scholar", "pubmed", "europe_pmc", "crossref"):
-        if by_source[src] and len(selected) < limit:
-            top_paper = by_source[src][0]
-            title_key = _normalize_title(top_paper.get("title", ""))
-            if title_key and title_key not in selected_titles:
-                selected.append(top_paper)
+    active_source_count = sum(1 for src in ordered_sources if by_source[src])
+    per_source_seed = 2 if active_source_count > 0 and limit >= active_source_count * 2 else 1
+
+    for src in ordered_sources:
+        if not by_source[src] or len(selected) >= limit:
+            continue
+        taken = 0
+        for paper in by_source[src]:
+            if len(selected) >= limit or taken >= per_source_seed:
+                break
+            title_key = _normalize_title(paper.get("title", ""))
+            if title_key and title_key in selected_titles:
+                continue
+            selected.append(paper)
+            taken += 1
+            if title_key:
                 selected_titles.add(title_key)
 
     for paper in ranked:
@@ -673,16 +696,37 @@ def fetch_papers(query: str, limit: int = 5) -> tuple[list[dict], dict[str, int 
     Fetch academic papers from Semantic Scholar, PubMed, Europe PMC, and Crossref in parallel,
     then merge, dedupe, rank, and cap to the requested limit.
     """
-    with ThreadPoolExecutor(max_workers=4) as executor:
-        semantic_future = executor.submit(fetch_semantic_papers, query, limit)
-        pubmed_future = executor.submit(fetch_pubmed_papers, query, limit)
-        europe_pmc_future = executor.submit(fetch_europe_pmc_papers, query, limit)
-        crossref_future = executor.submit(fetch_crossref_papers, query, limit)
+    source_limit = _source_pool_target(limit)
 
-        semantic_papers = semantic_future.result()
-        pubmed_papers = pubmed_future.result()
-        europe_pmc_papers = europe_pmc_future.result()
-        crossref_papers = crossref_future.result()
+    with ThreadPoolExecutor(max_workers=4) as executor:
+        semantic_future = executor.submit(fetch_semantic_papers, query, source_limit)
+        pubmed_future = executor.submit(fetch_pubmed_papers, query, source_limit)
+        europe_pmc_future = executor.submit(fetch_europe_pmc_papers, query, source_limit)
+        crossref_future = executor.submit(fetch_crossref_papers, query, source_limit)
+
+        try:
+            semantic_papers = semantic_future.result()
+        except Exception as e:
+            print(f"❌ Semantic Scholar pipeline error: {e}")
+            semantic_papers = []
+
+        try:
+            pubmed_papers = pubmed_future.result()
+        except Exception as e:
+            print(f"❌ PubMed pipeline error: {e}")
+            pubmed_papers = []
+
+        try:
+            europe_pmc_papers = europe_pmc_future.result()
+        except Exception as e:
+            print(f"❌ Europe PMC pipeline error: {e}")
+            europe_pmc_papers = []
+
+        try:
+            crossref_papers = crossref_future.result()
+        except Exception as e:
+            print(f"❌ Crossref pipeline error: {e}")
+            crossref_papers = []
 
     combined = semantic_papers + pubmed_papers + europe_pmc_papers + crossref_papers
     final_papers = _merge_rank_dedupe_with_query(combined, limit, query)

@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useEffect, useState } from "react";
 import SearchBar from "@/components/SearchBar";
 import LoadingPipeline from "@/components/LoadingPipeline";
 import AnswerDisplay from "@/components/AnswerDisplay";
@@ -8,8 +8,10 @@ import { Moon, Sun, GraduationCap, Sparkles, BookOpen, Cpu, Database, BrainCircu
 import { toast } from "sonner";
 
 type AppState = "idle" | "loading" | "results";
-const DEFAULT_NUM_PAPERS = 20;
+const DEFAULT_NUM_PAPERS = 150;
 const SEARCH_TIMEOUT_MS = 170000;
+const SEARCH_HISTORY_KEY = "openresearch_search_history";
+const MAX_SEARCH_HISTORY = 10;
 
 const SUGGESTED_QUERIES = [
   "How does machine learning improve medical imaging?",
@@ -24,6 +26,40 @@ const Index = () => {
   const [answer, setAnswer] = useState<string>("");
   const [papers, setPapers] = useState<any[]>([]);
   const [sourceSummary, setSourceSummary] = useState<any | null>(null);
+  const [searchHistory, setSearchHistory] = useState<string[]>([]);
+  const [numPapers, setNumPapers] = useState<number>(DEFAULT_NUM_PAPERS);
+  const [yearRange, setYearRange] = useState<string>("2018-2025");
+  const [peerReviewedOnly, setPeerReviewedOnly] = useState<boolean>(true);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(SEARCH_HISTORY_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        setSearchHistory(parsed.filter((item): item is string => typeof item === "string"));
+      }
+    } catch {
+      setSearchHistory([]);
+    }
+  }, []);
+
+  const updateSearchHistory = (query: string) => {
+    const normalized = query.trim();
+    if (!normalized) return;
+
+    setSearchHistory((prev) => {
+      const deduped = prev.filter((item) => item.toLowerCase() !== normalized.toLowerCase());
+      const next = [normalized, ...deduped].slice(0, MAX_SEARCH_HISTORY);
+      localStorage.setItem(SEARCH_HISTORY_KEY, JSON.stringify(next));
+      return next;
+    });
+  };
+
+  const clearSearchHistory = () => {
+    setSearchHistory([]);
+    localStorage.removeItem(SEARCH_HISTORY_KEY);
+  };
 
   const toggleTheme = () => {
     setIsDark(!isDark);
@@ -31,6 +67,7 @@ const Index = () => {
   };
 
   const handleSearch = async (query: string) => {
+    updateSearchHistory(query);
     setState("loading");
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), SEARCH_TIMEOUT_MS);
@@ -42,9 +79,9 @@ const Index = () => {
         signal: controller.signal,
         body: JSON.stringify({
           query,
-          num_papers: DEFAULT_NUM_PAPERS,
-          year_range: "2018-2025",
-          peer_reviewed_only: true,
+          num_papers: numPapers,
+          year_range: yearRange,
+          peer_reviewed_only: peerReviewedOnly,
         }),
       });
       
@@ -143,6 +180,34 @@ const Index = () => {
         <div className="flex-1 min-w-0 space-y-6">
           <SearchBar onSearch={handleSearch} isLoading={state === "loading"} />
 
+          {searchHistory.length > 0 && (
+            <div className="card-glass p-4 max-w-2xl mx-auto animate-fade-up">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-semibold text-foreground">Previous Searches</h3>
+                <button
+                  onClick={clearSearchHistory}
+                  className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                  disabled={state === "loading"}
+                >
+                  Clear
+                </button>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {searchHistory.map((item, index) => (
+                  <button
+                    key={`${item}-${index}`}
+                    onClick={() => handleSearch(item)}
+                    disabled={state === "loading"}
+                    className="px-3 py-1.5 rounded-lg text-xs text-muted-foreground hover:text-foreground bg-secondary hover:bg-accent transition-all duration-200 disabled:opacity-60"
+                    title={item}
+                  >
+                    {item}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           {state === "loading" && <LoadingPipeline />}
 
           {state === "results" && (
@@ -176,7 +241,14 @@ const Index = () => {
         </div>
 
         {/* Sidebar */}
-        <Sidebar />
+        <Sidebar
+          numPapers={numPapers}
+          onNumPapersChange={setNumPapers}
+          yearRange={yearRange}
+          onYearRangeChange={setYearRange}
+          peerReviewedOnly={peerReviewedOnly}
+          onPeerReviewedOnlyChange={setPeerReviewedOnly}
+        />
       </div>
 
       {/* ─── Footer ─── */}
