@@ -1,0 +1,22 @@
+# ── OpenResearch Python Dependencies ──────────────────────────────────
+# Install with: pip install -r requirements.txt
+
+# Web framework
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+
+# Data fetching
+requests>=2.31.0
+
+# RAG pipeline
+langchain>=0.1.0
+langchain-text-splitters>=0.3.0
+langchain-google-genai>=1.0.0
+langchain-huggingface>=0.1.0
+langchain-chroma>=0.1.0
+chromadb>=0.4.0
+sentence-transformers>=2.2.0
+
+# Utilities
+python-dotenv>=1.0.0
+pydantic>=2.0.0
