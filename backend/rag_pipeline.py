@@ -15,12 +15,14 @@ preventing hallucination.
 import json
 import os
 import re
+from pathlib import Path
 
 from dotenv import load_dotenv
 
 from langchain_google_genai import ChatGoogleGenerativeAI
 
-load_dotenv()
+ENV_PATH = Path(__file__).resolve().parent / ".env"
+load_dotenv(dotenv_path=ENV_PATH)
 
 # ── Configuration ─────────────────────────────────────────────────────
 EMBEDDING_MODEL = "all-MiniLM-L6-v2"

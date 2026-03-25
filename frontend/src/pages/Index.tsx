@@ -4,6 +4,7 @@ import LoadingPipeline from "@/components/LoadingPipeline";
 import AnswerDisplay from "@/components/AnswerDisplay";
 import SourcePapers from "@/components/SourcePapers";
 import Sidebar from "@/components/Sidebar";
+import { searchPapers } from "@/lib/api";
 import { Moon, Sun, GraduationCap, Sparkles, BookOpen, Cpu, Database, BrainCircuit } from "lucide-react";
 import { toast } from "sonner";
 
@@ -73,24 +74,15 @@ const Index = () => {
     const timeoutId = setTimeout(() => controller.abort(), SEARCH_TIMEOUT_MS);
 
     try {
-      const res = await fetch("http://localhost:8000/api/search", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        signal: controller.signal,
-        body: JSON.stringify({
+      const data = await searchPapers(
+        {
           query,
           num_papers: numPapers,
           year_range: yearRange,
           peer_reviewed_only: peerReviewedOnly,
-        }),
-      });
-      
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}));
-        throw new Error(errorData.detail || "Failed to fetch research data");
-      }
-      
-      const data = await res.json();
+        },
+        { signal: controller.signal }
+      );
       setAnswer(data.answer);
       setPapers(data.papers);
       setSourceSummary(data.source_summary ?? null);

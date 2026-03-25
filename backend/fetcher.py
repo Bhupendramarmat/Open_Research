@@ -11,6 +11,7 @@ Returns a single merged, deduplicated, ranked list of papers.
 
 import os
 import re
+from pathlib import Path
 import threading
 import time
 import xml.etree.ElementTree as ET
@@ -755,7 +756,8 @@ def fetch_papers(query: str, limit: int = 5) -> tuple[list[dict], dict[str, int 
 if __name__ == "__main__":
     from dotenv import load_dotenv
 
-    load_dotenv()
+    env_path = Path(__file__).resolve().parent / ".env"
+    load_dotenv(dotenv_path=env_path)
     results, summary = fetch_papers("How does machine learning improve medical imaging?", limit=5)
     print(f"Source summary: {summary}")
     for i, p in enumerate(results, 1):

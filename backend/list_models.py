@@ -1,8 +1,11 @@
 import os
+from pathlib import Path
+
 import requests
 from dotenv import load_dotenv
 
-load_dotenv()
+ENV_PATH = Path(__file__).resolve().parent / ".env"
+load_dotenv(dotenv_path=ENV_PATH)
 api_key = os.getenv("GOOGLE_API_KEY")
 
 url = f"https://generativelanguage.googleapis.com/v1beta/models?key={api_key}"

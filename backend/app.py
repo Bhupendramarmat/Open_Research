@@ -7,6 +7,7 @@ and receive AI-synthesized answers grounded in real research.
 """
 
 import os
+from pathlib import Path
 from contextlib import asynccontextmanager
 
 from dotenv import load_dotenv
@@ -18,7 +19,8 @@ from fetcher import fetch_papers
 from rag_pipeline import process_query
 
 # ── Load environment variables ────────────────────────────────────────
-load_dotenv()
+ENV_PATH = Path(__file__).resolve().parent / ".env"
+load_dotenv(dotenv_path=ENV_PATH)
 
 
 # ── Lifespan (startup / shutdown) ─────────────────────────────────────

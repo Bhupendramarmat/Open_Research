@@ -26,19 +26,20 @@ OpenResearch is an end-to-end **Retrieval-Augmented Generation (RAG)** applicati
 
 ```
 OpenResearch/
-├── app.py                 # FastAPI backend server
-├── fetcher.py             # Semantic Scholar API calls
-├── rag_pipeline.py        # ChromaDB + LangChain + Gemini RAG pipeline
-├── requirements.txt       # Python dependencies
-├── .env.example           # API key template
-├── README.md              # This file
-└── frontend/              # React frontend
-    ├── src/
-    │   ├── pages/         # Page components
-    │   ├── components/    # UI components
-    │   └── ...
-    ├── package.json
-    └── vite.config.ts
+├── backend/               # FastAPI backend
+│   ├── app.py             # FastAPI backend server
+│   ├── fetcher.py          # Semantic Scholar API calls
+│   ├── rag_pipeline.py     # ChromaDB + LangChain + Gemini RAG pipeline
+│   ├── requirements.txt    # Python dependencies
+│   └── .env.example        # API key template
+├── frontend/              # React frontend
+│   ├── src/
+│   │   ├── pages/          # Page components
+│   │   ├── components/     # UI components
+│   │   └── ...
+│   ├── package.json
+│   └── vite.config.ts
+└── README.md               # This file
 ```
 
 ---
@@ -48,18 +49,18 @@ OpenResearch/
 ### 1. Clone & Setup Environment
 ```bash
 cd OpenResearch
-cp .env.example .env
+cp backend/.env.example backend/.env
 # Edit .env and add your GOOGLE_API_KEY
 ```
 
 ### 2. Install Python Dependencies
 ```bash
-pip install -r requirements.txt
+pip install -r backend/requirements.txt
 ```
 
 ### 3. Start the Backend
 ```bash
-python app.py
+python backend/app.py
 # Backend runs on http://localhost:8000
 ```
 
