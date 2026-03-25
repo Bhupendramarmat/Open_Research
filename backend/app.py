@@ -15,8 +15,13 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
-from backend.fetcher import fetch_papers
-from backend.rag_pipeline import process_query
+try:
+    from backend.fetcher import fetch_papers
+    from backend.rag_pipeline import process_query
+except ModuleNotFoundError:
+    # Fallback for running from the backend/ directory.
+    from fetcher import fetch_papers
+    from rag_pipeline import process_query
 
 # ── Load environment variables ────────────────────────────────────────
 ENV_PATH = Path(__file__).resolve().parent / ".env"
