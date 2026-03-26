@@ -150,15 +150,17 @@ const Sidebar = ({
       </aside>
 
       {/* Mobile toggle */}
-      <button
-        onClick={() => setMobileOpen(true)}
-        className="lg:hidden fixed bottom-6 right-6 z-50 w-12 h-12 rounded-2xl flex items-center justify-center shadow-lg"
-        style={{ background: "var(--gradient-hero)" }}
-        id="mobile-sidebar-toggle"
-        aria-label="Open settings"
-      >
-        <Menu className="h-5 w-5 text-white" />
-      </button>
+      {!mobileOpen && (
+        <button
+          onClick={() => setMobileOpen(true)}
+          className="lg:hidden fixed bottom-5 right-4 z-50 w-11 h-11 rounded-xl flex items-center justify-center shadow-lg"
+          style={{ background: "var(--gradient-hero)" }}
+          id="mobile-sidebar-toggle"
+          aria-label="Open settings"
+        >
+          <Menu className="h-4.5 w-4.5 text-white" />
+        </button>
+      )}
 
       {/* Mobile overlay */}
       {mobileOpen && (

@@ -51,17 +51,17 @@ const PaperCard = ({ paper, index }: { paper: Paper; index: number }) => {
           href={paper.url}
           target="_blank"
           rel="noopener noreferrer"
-          className="font-semibold text-foreground group-hover:text-primary transition-colors text-sm leading-snug inline-flex items-start gap-1.5"
+          className="font-semibold text-foreground group-hover:text-primary transition-colors text-[13px] sm:text-sm leading-snug inline-flex items-start gap-1.5"
         >
           <span>{paper.title}</span>
           <ExternalLink className="h-3 w-3 opacity-0 group-hover:opacity-100 transition-all duration-200 shrink-0 mt-1 group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
         </a>
 
-        <div className="flex flex-wrap items-center gap-2 mt-2">
-          <p className="text-muted-foreground text-xs truncate max-w-[200px]">
+        <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mt-1.5 sm:mt-2">
+          <p className="text-muted-foreground text-[11px] sm:text-xs truncate max-w-[140px] sm:max-w-[200px]">
             {paper.authors}
           </p>
-          <span className="flex items-center gap-1 text-xs text-muted-foreground">
+          <span className="flex items-center gap-1 text-[11px] sm:text-xs text-muted-foreground">
             <Calendar className="h-3 w-3" />
             {paper.year}
           </span>
@@ -107,7 +107,7 @@ const SourcePapers = ({
   const visiblePapers = showAll ? papers : papers.slice(0, 8);
 
   return (
-    <div className="card-elevated p-6 md:p-8 max-w-2xl mx-auto animate-slide-up-elastic delay-100" id="source-papers">
+    <div className="card-elevated p-4 sm:p-6 md:p-8 max-w-2xl mx-auto animate-slide-up-elastic delay-100" id="source-papers">
       {/* Header */}
       <div className="flex items-center gap-3 mb-5">
         <div className="w-9 h-9 rounded-xl flex items-center justify-center"
@@ -115,7 +115,7 @@ const SourcePapers = ({
           <Quote className="h-4 w-4 text-primary" />
         </div>
         <div className="flex-1">
-          <h3 className="text-lg font-semibold text-foreground tracking-tight">Source Papers</h3>
+          <h3 className="text-base sm:text-lg font-semibold text-foreground tracking-tight">Source Papers</h3>
         </div>
         <span className="text-xs text-muted-foreground font-medium px-2.5 py-1 rounded-full"
               style={{ background: "var(--gradient-subtle)" }}>
@@ -124,7 +124,7 @@ const SourcePapers = ({
       </div>
 
       {sourceSummary && (
-        <div className="mb-5 flex flex-wrap gap-2">
+        <div className="mb-4 sm:mb-5 flex flex-wrap gap-1.5 sm:gap-2">
           {Object.entries({
             semantic_scholar: sourceSummary.semantic_scholar,
             pubmed: sourceSummary.pubmed,

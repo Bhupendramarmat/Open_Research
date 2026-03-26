@@ -548,3 +548,34 @@
 .prose-answer blockquote {
   @apply border-l-2 border-primary/30 pl-4 italic text-muted-foreground my-4;
 }
+
+/* ─── Scrollbar hide utility ─── */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+/* ─── Mobile-specific tweaks ─── */
+@media (max-width: 639px) {
+  .suggestion-card {
+    @apply text-xs py-3 px-3;
+  }
+  .paper-card {
+    @apply py-3 px-3 gap-2.5;
+  }
+  .card-glass, .card-elevated {
+    @apply rounded-xl;
+  }
+  .btn-primary-glow {
+    @apply rounded-lg;
+  }
+  .stat-item {
+    @apply text-[11px] py-2;
+  }
+  .prose-answer {
+    @apply text-sm leading-relaxed;
+  }
+}

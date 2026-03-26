@@ -166,7 +166,7 @@ const Index = () => {
       <MeshBackground />
 
       {/* ─── Top Navigation Bar ─── */}
-      <nav className="relative z-10 flex items-center justify-between px-6 py-4 max-w-6xl mx-auto" id="main-nav">
+      <nav className="relative z-10 flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 max-w-6xl mx-auto" id="main-nav">
         <div className="flex items-center gap-2.5">
           <div className="w-9 h-9 rounded-xl flex items-center justify-center animate-glow-pulse"
                style={{ background: "var(--gradient-hero)" }}>
@@ -193,19 +193,19 @@ const Index = () => {
       </nav>
 
       {/* ─── Hero Section ─── */}
-      <header className="relative z-10 pt-6 pb-4 text-center px-4" id="hero-section">
-        <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-medium mb-6 animate-fade-up"
+      <header className="relative z-10 pt-4 sm:pt-6 pb-3 sm:pb-4 text-center px-4" id="hero-section">
+        <div className="inline-flex items-center gap-1.5 sm:gap-2 px-3 sm:px-3.5 py-1 sm:py-1.5 rounded-full text-[11px] sm:text-xs font-medium mb-4 sm:mb-6 animate-fade-up"
              style={{ background: "var(--gradient-subtle)", color: "hsl(var(--primary))", border: "1px solid hsl(var(--primary) / 0.15)" }}>
           <Sparkles className="h-3 w-3" />
           AI-Powered Academic Research Engine
         </div>
 
-        <h1 className="text-5xl md:text-6xl lg:text-7xl font-bold tracking-tight animate-fade-up delay-100">
+        <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold tracking-tight animate-fade-up delay-100">
           <span className="text-gradient animate-gradient">Open</span>
           <span className="text-foreground">Research</span>
         </h1>
 
-        <p className="mt-4 text-muted-foreground max-w-lg mx-auto text-base md:text-lg leading-relaxed animate-fade-up delay-200">
+        <p className="mt-3 sm:mt-4 text-muted-foreground max-w-lg mx-auto text-sm sm:text-base md:text-lg leading-relaxed animate-fade-up delay-200">
           Ask any scientific question, get answers backed by{" "}
           <strong className="text-foreground">real, peer-reviewed papers</strong>.
         </p>
@@ -213,7 +213,7 @@ const Index = () => {
         {/* Typing animation preview */}
         {state === "idle" && (
           <div className="mt-5 animate-fade-up delay-300">
-            <span className="text-sm text-muted-foreground/50 font-mono">
+            <span className="text-xs sm:text-sm text-muted-foreground/50 font-mono">
               {typingText}
               <span className="inline-block w-[2px] h-4 bg-primary/60 ml-0.5 align-text-bottom" style={{ animation: "typewriter-blink 1s step-end infinite" }} />
             </span>
@@ -224,13 +224,13 @@ const Index = () => {
       </header>
 
       {/* ─── Main Layout ─── */}
-      <div className="relative z-10 max-w-6xl mx-auto px-4 pb-20 flex gap-8" id="main-content">
+      <div className="relative z-10 max-w-6xl mx-auto px-3 sm:px-4 pb-24 sm:pb-20 flex gap-8" id="main-content">
         {/* Content Column */}
-        <div className="flex-1 min-w-0 space-y-6">
+        <div className="flex-1 min-w-0 space-y-4 sm:space-y-6">
           <SearchBar onSearch={handleSearch} isLoading={state === "loading"} />
 
           {searchHistory.length > 0 && (
-            <div className="card-glass p-4 max-w-2xl mx-auto animate-fade-up" id="search-history">
+            <div className="card-glass p-3 sm:p-4 max-w-2xl mx-auto animate-fade-up" id="search-history">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="text-xs font-semibold text-foreground tracking-tight uppercase">Recent Searches</h3>
                 <button
@@ -241,13 +241,13 @@ const Index = () => {
                   Clear all
                 </button>
               </div>
-              <div className="flex flex-wrap gap-1.5">
+              <div className="flex flex-nowrap sm:flex-wrap gap-1.5 overflow-x-auto pb-1 sm:pb-0 scrollbar-hide">
                 {searchHistory.map((item, index) => (
                   <button
                     key={`${item}-${index}`}
                     onClick={() => handleSearch(item)}
                     disabled={state === "loading"}
-                    className="px-3 py-1.5 rounded-lg text-xs text-muted-foreground hover:text-foreground bg-secondary/60 hover:bg-secondary transition-all duration-200 disabled:opacity-60 truncate max-w-[200px]"
+                    className="px-3 py-1.5 rounded-lg text-xs text-muted-foreground hover:text-foreground bg-secondary/60 hover:bg-secondary transition-all duration-200 disabled:opacity-60 truncate max-w-[180px] sm:max-w-[200px] shrink-0 sm:shrink"
                     title={item}
                   >
                     {item}
@@ -277,11 +277,11 @@ const Index = () => {
           )}
 
           {state === "idle" && (
-            <div className="text-center pt-8 animate-fade-up delay-500" id="suggestions">
-              <p className="text-muted-foreground text-xs mb-4 font-medium uppercase tracking-widest">
+            <div className="text-center pt-5 sm:pt-8 animate-fade-up delay-500" id="suggestions">
+              <p className="text-muted-foreground text-[11px] sm:text-xs mb-3 sm:mb-4 font-medium uppercase tracking-widest">
                 Try a question
               </p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-2xl mx-auto">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3 max-w-2xl mx-auto">
                 {SUGGESTED_QUERIES.map((q, i) => (
                   <button
                     key={i}
@@ -310,7 +310,7 @@ const Index = () => {
       </div>
 
       {/* ─── Footer ─── */}
-      <footer className="relative z-10 border-t border-border/30 py-6 text-center" id="footer">
+      <footer className="relative z-10 border-t border-border/30 py-4 sm:py-6 text-center" id="footer">
         <div className="max-w-6xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
           <p className="text-xs text-muted-foreground">
             Built with ❤️ — All answers cited from real, peer-reviewed research

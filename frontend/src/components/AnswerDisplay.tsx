@@ -14,17 +14,17 @@ const AnswerDisplay = ({ answer }: { answer: string }) => {
   };
 
   return (
-    <div className="card-elevated p-6 md:p-8 max-w-2xl mx-auto animate-slide-up-elastic" id="answer-display">
+    <div className="card-elevated p-4 sm:p-6 md:p-8 max-w-2xl mx-auto animate-slide-up-elastic" id="answer-display">
       {/* Header */}
-      <div className="flex items-center justify-between mb-5">
+      <div className="flex items-start sm:items-center justify-between mb-4 sm:mb-5 gap-2">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-xl flex items-center justify-center animate-glow-pulse"
                style={{ background: "var(--gradient-hero)" }}>
             <Lightbulb className="h-4.5 w-4.5 text-white" />
           </div>
           <div>
-            <h2 className="text-lg font-semibold text-foreground tracking-tight">Synthesized Answer</h2>
-            <p className="text-xs text-muted-foreground flex items-center gap-1">
+            <h2 className="text-base sm:text-lg font-semibold text-foreground tracking-tight">Synthesized Answer</h2>
+            <p className="text-[11px] sm:text-xs text-muted-foreground flex items-center gap-1">
               <Sparkles className="h-3 w-3" />
               AI-generated from cited papers
             </p>
