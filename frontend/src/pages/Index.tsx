@@ -4,8 +4,9 @@ import LoadingPipeline from "@/components/LoadingPipeline";
 import AnswerDisplay from "@/components/AnswerDisplay";
 import SourcePapers from "@/components/SourcePapers";
 import Sidebar from "@/components/Sidebar";
+import MeshBackground from "@/components/MeshBackground";
 import { searchPapers } from "@/lib/api";
-import { Moon, Sun, GraduationCap, Sparkles, BookOpen, Cpu, Database, BrainCircuit } from "lucide-react";
+import { Moon, Sun, GraduationCap, Sparkles, BookOpen, Cpu, Database, BrainCircuit, ArrowUpRight } from "lucide-react";
 import { toast } from "sonner";
 
 type AppState = "idle" | "loading" | "results";
@@ -21,9 +22,21 @@ const SUGGESTED_QUERIES = [
   "What is the impact of climate change on biodiversity?",
 ];
 
+const TYPING_TEXTS = [
+  "How does CRISPR gene editing work?",
+  "What are quantum computing applications?",
+  "Latest advances in fusion energy?",
+  "How do mRNA vaccines function?",
+];
+
 const Index = () => {
   const [state, setState] = useState<AppState>("idle");
-  const [isDark, setIsDark] = useState(false);
+  const [isDark, setIsDark] = useState(() => {
+    if (typeof window !== "undefined") {
+      return window.matchMedia("(prefers-color-scheme: dark)").matches;
+    }
+    return false;
+  });
   const [answer, setAnswer] = useState<string>("");
   const [papers, setPapers] = useState<any[]>([]);
   const [sourceSummary, setSourceSummary] = useState<any | null>(null);
@@ -31,6 +44,54 @@ const Index = () => {
   const [numPapers, setNumPapers] = useState<number>(DEFAULT_NUM_PAPERS);
   const [yearRange, setYearRange] = useState<string>("2018-2025");
   const [peerReviewedOnly, setPeerReviewedOnly] = useState<boolean>(true);
+  const [typingText, setTypingText] = useState("");
+  const [typingIndex, setTypingIndex] = useState(0);
+
+  // Initialize dark mode
+  useEffect(() => {
+    if (isDark) {
+      document.documentElement.classList.add("dark");
+    }
+  }, []);
+
+  // Typing animation for hero
+  useEffect(() => {
+    if (state !== "idle") return;
+
+    let charIndex = 0;
+    let currentTextIndex = typingIndex;
+    let isDeleting = false;
+    let timeout: ReturnType<typeof setTimeout>;
+
+    const type = () => {
+      const currentText = TYPING_TEXTS[currentTextIndex];
+
+      if (!isDeleting) {
+        setTypingText(currentText.slice(0, charIndex + 1));
+        charIndex++;
+        if (charIndex >= currentText.length) {
+          isDeleting = true;
+          timeout = setTimeout(type, 2000);
+          return;
+        }
+        timeout = setTimeout(type, 60 + Math.random() * 40);
+      } else {
+        setTypingText(currentText.slice(0, charIndex - 1));
+        charIndex--;
+        if (charIndex <= 0) {
+          isDeleting = false;
+          currentTextIndex = (currentTextIndex + 1) % TYPING_TEXTS.length;
+          setTypingIndex(currentTextIndex);
+          timeout = setTimeout(type, 400);
+          return;
+        }
+        timeout = setTimeout(type, 30);
+      }
+    };
+
+    timeout = setTimeout(type, 1000);
+    return () => clearTimeout(timeout);
+  }, [state, typingIndex]);
 
   useEffect(() => {
     try {
@@ -100,97 +161,93 @@ const Index = () => {
     }
   };
 
-  const handleSuggestionClick = (query: string) => {
-    handleSearch(query);
-  };
-
   return (
     <div className="min-h-screen bg-background relative overflow-hidden">
-      {/* Background decorative elements */}
-      <div className="fixed inset-0 pointer-events-none overflow-hidden">
-        <div
-          className="absolute -top-40 -right-40 w-96 h-96 rounded-full opacity-20 blur-3xl animate-float"
-          style={{ background: "hsl(var(--primary) / 0.3)" }}
-        />
-        <div
-          className="absolute top-1/2 -left-32 w-72 h-72 rounded-full opacity-15 blur-3xl animate-float delay-300"
-          style={{ background: "hsl(210, 80%, 50%, 0.3)" }}
-        />
-        <div
-          className="absolute -bottom-20 right-1/4 w-80 h-80 rounded-full opacity-10 blur-3xl animate-float delay-500"
-          style={{ background: "hsl(260, 70%, 55%, 0.3)" }}
-        />
-      </div>
+      <MeshBackground />
 
       {/* ─── Top Navigation Bar ─── */}
-      <nav className="relative z-10 flex items-center justify-between px-6 py-4 max-w-6xl mx-auto">
-        <div className="flex items-center gap-2">
-          <div className="w-9 h-9 rounded-lg bg-primary flex items-center justify-center animate-glow-pulse">
-            <GraduationCap className="h-5 w-5 text-primary-foreground" />
+      <nav className="relative z-10 flex items-center justify-between px-6 py-4 max-w-6xl mx-auto" id="main-nav">
+        <div className="flex items-center gap-2.5">
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center animate-glow-pulse"
+               style={{ background: "var(--gradient-hero)" }}>
+            <GraduationCap className="h-5 w-5 text-white" />
           </div>
-          <span className="font-semibold text-foreground text-lg tracking-tight">OpenResearch</span>
+          <div>
+            <span className="font-semibold text-foreground text-base tracking-tight block leading-tight">
+              OpenResearch
+            </span>
+            <span className="text-[10px] text-muted-foreground leading-tight">AI Academic Assistant</span>
+          </div>
         </div>
 
-        <button
-          onClick={toggleTheme}
-          className="p-2.5 rounded-xl bg-secondary hover:bg-accent transition-all duration-300 hover:scale-105"
-          aria-label="Toggle theme"
-        >
-          {isDark ? <Sun className="h-4 w-4 text-foreground" /> : <Moon className="h-4 w-4 text-foreground" />}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={toggleTheme}
+            id="theme-toggle"
+            className="p-2.5 rounded-xl bg-secondary/50 hover:bg-secondary transition-all duration-300 hover:scale-105"
+            aria-label="Toggle theme"
+          >
+            {isDark ? <Sun className="h-4 w-4 text-foreground" /> : <Moon className="h-4 w-4 text-foreground" />}
+          </button>
+        </div>
       </nav>
 
       {/* ─── Hero Section ─── */}
-      <header className="relative z-10 pt-8 pb-6 text-center px-4">
-        <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-accent text-accent-foreground text-xs font-medium mb-6 animate-fade-up">
+      <header className="relative z-10 pt-6 pb-4 text-center px-4" id="hero-section">
+        <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-medium mb-6 animate-fade-up"
+             style={{ background: "var(--gradient-subtle)", color: "hsl(var(--primary))", border: "1px solid hsl(var(--primary) / 0.15)" }}>
           <Sparkles className="h-3 w-3" />
-          Powered by Gemini 1.5 Flash + Semantic Scholar
+          AI-Powered Academic Research Engine
         </div>
 
-        <h1 className="text-5xl md:text-6xl lg:text-7xl font-serif tracking-tight animate-fade-up delay-100">
-          <span className="text-gradient">OpenResearch</span>
-          <span className="ml-3">🔍</span>
+        <h1 className="text-5xl md:text-6xl lg:text-7xl font-bold tracking-tight animate-fade-up delay-100">
+          <span className="text-gradient animate-gradient">Open</span>
+          <span className="text-foreground">Research</span>
         </h1>
 
-        <p className="mt-4 text-muted-foreground max-w-xl mx-auto text-base md:text-lg leading-relaxed animate-fade-up delay-200">
-          Your AI-Powered Academic Assistant. Ask any scientific question and get
-          answers grounded in <strong className="text-foreground">real, peer-reviewed papers</strong>.
+        <p className="mt-4 text-muted-foreground max-w-lg mx-auto text-base md:text-lg leading-relaxed animate-fade-up delay-200">
+          Ask any scientific question, get answers backed by{" "}
+          <strong className="text-foreground">real, peer-reviewed papers</strong>.
         </p>
 
-        {/* Tech stack pills */}
-        <div className="flex flex-wrap items-center justify-center gap-2 mt-6 animate-fade-up delay-300">
-          <span className="badge-tech"><BookOpen className="h-3 w-3" /> Semantic Scholar</span>
-          <span className="badge-tech"><Cpu className="h-3 w-3" /> HuggingFace</span>
-          <span className="badge-tech"><Database className="h-3 w-3" /> ChromaDB</span>
-          <span className="badge-tech"><BrainCircuit className="h-3 w-3" /> Gemini AI</span>
-        </div>
+        {/* Typing animation preview */}
+        {state === "idle" && (
+          <div className="mt-5 animate-fade-up delay-300">
+            <span className="text-sm text-muted-foreground/50 font-mono">
+              {typingText}
+              <span className="inline-block w-[2px] h-4 bg-primary/60 ml-0.5 align-text-bottom" style={{ animation: "typewriter-blink 1s step-end infinite" }} />
+            </span>
+          </div>
+        )}
+
+
       </header>
 
       {/* ─── Main Layout ─── */}
-      <div className="relative z-10 max-w-6xl mx-auto px-4 pb-20 flex gap-8">
+      <div className="relative z-10 max-w-6xl mx-auto px-4 pb-20 flex gap-8" id="main-content">
         {/* Content Column */}
         <div className="flex-1 min-w-0 space-y-6">
           <SearchBar onSearch={handleSearch} isLoading={state === "loading"} />
 
           {searchHistory.length > 0 && (
-            <div className="card-glass p-4 max-w-2xl mx-auto animate-fade-up">
+            <div className="card-glass p-4 max-w-2xl mx-auto animate-fade-up" id="search-history">
               <div className="flex items-center justify-between mb-3">
-                <h3 className="text-sm font-semibold text-foreground">Previous Searches</h3>
+                <h3 className="text-xs font-semibold text-foreground tracking-tight uppercase">Recent Searches</h3>
                 <button
                   onClick={clearSearchHistory}
-                  className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                  className="text-[11px] text-muted-foreground hover:text-foreground transition-colors px-2 py-0.5 rounded-md hover:bg-secondary"
                   disabled={state === "loading"}
                 >
-                  Clear
+                  Clear all
                 </button>
               </div>
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-1.5">
                 {searchHistory.map((item, index) => (
                   <button
                     key={`${item}-${index}`}
                     onClick={() => handleSearch(item)}
                     disabled={state === "loading"}
-                    className="px-3 py-1.5 rounded-lg text-xs text-muted-foreground hover:text-foreground bg-secondary hover:bg-accent transition-all duration-200 disabled:opacity-60"
+                    className="px-3 py-1.5 rounded-lg text-xs text-muted-foreground hover:text-foreground bg-secondary/60 hover:bg-secondary transition-all duration-200 disabled:opacity-60 truncate max-w-[200px]"
                     title={item}
                   >
                     {item}
@@ -206,24 +263,33 @@ const Index = () => {
             <>
               <AnswerDisplay answer={answer} />
               <SourcePapers papers={papers} sourceSummary={sourceSummary} />
+              {/* New search button */}
+              <div className="text-center animate-fade-up">
+                <button
+                  onClick={() => setState("idle")}
+                  className="text-sm text-primary hover:text-primary/80 font-medium transition-all px-5 py-2.5 rounded-xl hover:bg-accent flex items-center gap-1.5 mx-auto"
+                >
+                  <ArrowUpRight className="h-4 w-4" />
+                  New Search
+                </button>
+              </div>
             </>
           )}
 
           {state === "idle" && (
-            <div className="text-center pt-10 animate-fade-up delay-400">
-              <p className="text-muted-foreground text-sm mb-4 font-medium uppercase tracking-wider">
+            <div className="text-center pt-8 animate-fade-up delay-500" id="suggestions">
+              <p className="text-muted-foreground text-xs mb-4 font-medium uppercase tracking-widest">
                 Try a question
               </p>
-              <div className="flex flex-wrap justify-center gap-2 max-w-2xl mx-auto">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-2xl mx-auto">
                 {SUGGESTED_QUERIES.map((q, i) => (
                   <button
                     key={i}
-                    onClick={() => handleSuggestionClick(q)}
-                    className="px-4 py-2.5 rounded-xl text-sm text-muted-foreground hover:text-foreground
-                               bg-card border border-border/50 hover:border-primary/30
-                               transition-all duration-300 hover:shadow-md hover:-translate-y-0.5 text-left"
+                    onClick={() => handleSearch(q)}
+                    className="suggestion-card"
+                    style={{ animationDelay: `${0.5 + i * 0.1}s` }}
                   >
-                    <span className="text-primary mr-1.5">→</span>
+                    <span className="text-primary mr-2 font-mono text-xs">→</span>
                     {q}
                   </button>
                 ))}
@@ -244,10 +310,16 @@ const Index = () => {
       </div>
 
       {/* ─── Footer ─── */}
-      <footer className="relative z-10 border-t border-border/50 py-6 text-center">
-        <p className="text-xs text-muted-foreground">
-          Built with ❤️ — Zero running cost · All answers cited from real research
-        </p>
+      <footer className="relative z-10 border-t border-border/30 py-6 text-center" id="footer">
+        <div className="max-w-6xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
+          <p className="text-xs text-muted-foreground">
+            Built with ❤️ — All answers cited from real, peer-reviewed research
+          </p>
+          <div className="flex items-center gap-3">
+            <span className="text-[10px] text-muted-foreground/60 font-mono">v1.0</span>
+            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" title="System online" />
+          </div>
+        </div>
       </footer>
     </div>
   );

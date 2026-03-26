@@ -1,11 +1,12 @@
-import { Lightbulb, Copy, Check } from "lucide-react";
+import { Lightbulb, Copy, Check, Sparkles } from "lucide-react";
 import { useState } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 const AnswerDisplay = ({ answer }: { answer: string }) => {
   const [copied, setCopied] = useState(false);
 
   const handleCopy = () => {
-    // Strip HTML tags for plain text copy
     const plainText = answer.replace(/<[^>]*>/g, "");
     navigator.clipboard.writeText(plainText);
     setCopied(true);
@@ -13,43 +14,53 @@ const AnswerDisplay = ({ answer }: { answer: string }) => {
   };
 
   return (
-    <div className="card-elevated p-6 md:p-8 max-w-2xl mx-auto animate-fade-up">
+    <div className="card-elevated p-6 md:p-8 max-w-2xl mx-auto animate-slide-up-elastic" id="answer-display">
       {/* Header */}
       <div className="flex items-center justify-between mb-5">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg bg-accent flex items-center justify-center">
-            <Lightbulb className="h-4 w-4 text-accent-foreground" />
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center animate-glow-pulse"
+               style={{ background: "var(--gradient-hero)" }}>
+            <Lightbulb className="h-4.5 w-4.5 text-white" />
           </div>
-          <h2 className="text-xl font-serif text-foreground">Synthesized Answer</h2>
+          <div>
+            <h2 className="text-lg font-semibold text-foreground tracking-tight">Synthesized Answer</h2>
+            <p className="text-xs text-muted-foreground flex items-center gap-1">
+              <Sparkles className="h-3 w-3" />
+              AI-generated from cited papers
+            </p>
+          </div>
         </div>
 
         <button
           onClick={handleCopy}
+          id="copy-answer-btn"
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium
                      text-muted-foreground hover:text-foreground bg-secondary hover:bg-accent
-                     transition-all duration-200"
+                     transition-all duration-200 hover:scale-105"
         >
           {copied ? <Check className="h-3 w-3 text-primary" /> : <Copy className="h-3 w-3" />}
           {copied ? "Copied!" : "Copy"}
         </button>
       </div>
 
-      {/* Accent line */}
-      <div className="h-0.5 w-16 rounded-full mb-5" style={{ background: "var(--gradient-hero)" }} />
+      {/* Accent gradient line */}
+      <div className="h-px w-full rounded-full mb-6" style={{ background: "var(--gradient-hero)", opacity: 0.3 }} />
 
-      {/* Answer content */}
-      <div
-        className="text-secondary-foreground leading-relaxed space-y-4 text-[15px]"
-        dangerouslySetInnerHTML={{
-          __html: answer.replace(/\n\n/g, '</p><p class="mt-3">').replace(/^/, '<p>').replace(/$/, '</p>'),
-        }}
-      />
+      {/* Answer content with markdown */}
+      <div className="prose-answer">
+        <ReactMarkdown remarkPlugins={[remarkGfm]}>
+          {answer}
+        </ReactMarkdown>
+      </div>
 
       {/* Disclaimer */}
-      <div className="mt-6 pt-4 border-t border-border/50">
-        <p className="text-xs text-muted-foreground italic flex items-start gap-1.5">
-          <span className="text-primary mt-0.5">ⓘ</span>
-          This answer was generated using only the content from the retrieved academic papers listed below.
+      <div className="mt-6 pt-4 border-t border-border/30">
+        <p className="text-xs text-muted-foreground italic flex items-start gap-2">
+          <span className="w-4 h-4 rounded-full flex items-center justify-center shrink-0 mt-0.5 text-[10px]"
+                style={{ background: "var(--gradient-subtle)", color: "hsl(var(--primary))" }}>
+            i
+          </span>
+          This answer was generated using only the content from retrieved academic papers listed below.
           Always verify claims in the original sources.
         </p>
       </div>
