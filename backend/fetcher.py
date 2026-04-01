@@ -75,6 +75,14 @@ _STOPWORDS = {
     "study",
 }
 
+_REVIEW_TERMS = {
+    "review",
+    "systematic review",
+    "narrative review",
+    "meta analysis",
+    "meta-analysis",
+}
+
 
 def _safe_int(value) -> int:
     try:
@@ -120,16 +128,21 @@ def _paper_relevance_score(paper: dict, query: str) -> int:
     haystack = f"{title_text} {abstract_text}"
 
     score = 0
-    if "low risk" in _normalize_query_text(query).lower() and "low risk" in haystack:
-        score += 8
-    if "preeclampsia" in _normalize_query_text(query).lower() and "preeclampsia" in haystack:
-        score += 10
+    normalized_query = _normalize_query_text(query).lower()
+
+    for phrase in _REVIEW_TERMS:
+        if phrase in title_text or phrase in abstract_text:
+            if phrase not in normalized_query:
+                score -= 6
 
     for term in query_terms:
         if term in title_text:
-            score += 4
+            score += 7
         elif term in abstract_text:
-            score += 2
+            score += 3
+
+    if len(query_terms) >= 3 and all(term in title_text for term in query_terms[:3]):
+        score += 8
 
     return score
 
@@ -140,11 +153,31 @@ def _is_retracted(title: str, abstract: str) -> bool:
     return "retracted" in t or "statement of retraction" in a
 
 
+def _recency_boost(year_value: int) -> int:
+    if year_value <= 0:
+        return 0
+    current_year = time.gmtime().tm_year
+    age = max(0, current_year - year_value)
+    return max(0, 10 - age)
+
+
+def _citation_boost(citation_count: int) -> int:
+    if citation_count <= 0:
+        return 0
+    return min(15, int((citation_count ** 0.5) * 2.5))
+
+
 def _sort_key_with_query(paper: dict, query: str) -> tuple[int, int, int]:
+    year_value = _safe_int(paper.get("year"))
+    citation_value = _safe_int(paper.get("citation_count"))
+    relevance = _paper_relevance_score(paper, query)
+    relevance += _recency_boost(year_value)
+    relevance += _citation_boost(citation_value)
+
     return (
-        _paper_relevance_score(paper, query),
-        _safe_int(paper.get("citation_count")),
-        _safe_int(paper.get("year")),
+        relevance,
+        year_value,
+        citation_value,
     )
 
 

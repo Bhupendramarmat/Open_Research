@@ -119,7 +119,11 @@ def refine_query(query: str) -> str:
     if len(clean_query.split()) < 8 and len(clean_query) < 60:
         return query
 
-    prompt = f"""Extract the 3 to 5 most important scientific keywords or short phrases from this query.
+    is_long_query = len(clean_query.split()) >= 14 or len(clean_query) >= 120
+    keyword_target = "3 to 4" if is_long_query else "3 to 5"
+
+    prompt = f"""Extract the {keyword_target} most important scientific keywords or short phrases from this query.
+Avoid generic study-type words unless they are central to the topic.
 Return ONLY valid JSON with this schema:
 {{"keywords": ["...", "...", "..."]}}
 
@@ -144,12 +148,28 @@ Query:
     if not isinstance(keywords, list):
         return query
 
+    generic_terms = {
+        "review",
+        "systematic review",
+        "meta analysis",
+        "meta-analysis",
+        "study",
+        "trial",
+        "randomized",
+        "randomised",
+        "controlled",
+        "double blind",
+        "double-blind",
+    }
+
     cleaned_keywords = []
     seen = set()
     for item in keywords:
         if not isinstance(item, str):
             continue
         token = " ".join(item.split()).strip()
+        if token.lower() in generic_terms:
+            continue
         if not token:
             continue
         key = token.lower()
@@ -161,7 +181,7 @@ Query:
     if not cleaned_keywords:
         return query
 
-    return " ".join(cleaned_keywords[:5])
+    return " ".join(cleaned_keywords[:4] if is_long_query else cleaned_keywords[:5])
 
 
 def process_query(query: str, papers: list[dict]) -> tuple[str, list[str]]:
