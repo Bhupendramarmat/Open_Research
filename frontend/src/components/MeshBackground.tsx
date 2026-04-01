@@ -28,7 +28,7 @@ const MeshBackground = () => {
     window.addEventListener("resize", resize);
 
     // Create particles
-    const PARTICLE_COUNT = 40;
+    const PARTICLE_COUNT = 28;
     for (let i = 0; i < PARTICLE_COUNT; i++) {
       particles.push({
         x: Math.random() * canvas.width,
@@ -37,7 +37,7 @@ const MeshBackground = () => {
         vy: (Math.random() - 0.5) * 0.3,
         size: Math.random() * 2 + 0.5,
         opacity: Math.random() * 0.3 + 0.05,
-        hue: Math.random() > 0.5 ? 262 : 185,
+        hue: Math.random() > 0.5 ? 198 : 205,
       });
     }
 
@@ -72,7 +72,7 @@ const MeshBackground = () => {
             ctx.moveTo(particles[i].x, particles[i].y);
             ctx.lineTo(particles[j].x, particles[j].y);
             const alpha = (1 - dist / 180) * 0.06;
-            ctx.strokeStyle = `hsla(262, 60%, 60%, ${alpha})`;
+            ctx.strokeStyle = `hsla(198, 55%, 45%, ${alpha})`;
             ctx.lineWidth = 0.5;
             ctx.stroke();
           }
@@ -95,7 +95,7 @@ const MeshBackground = () => {
       <canvas
         ref={canvasRef}
         className="fixed inset-0 pointer-events-none z-0"
-        style={{ opacity: 0.6 }}
+        style={{ opacity: 0.45 }}
       />
       {/* Gradient orbs */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">

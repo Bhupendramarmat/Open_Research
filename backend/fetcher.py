@@ -5,6 +5,8 @@ Fetches papers in parallel from:
 1) Semantic Scholar Academic Graph API
 2) PubMed (NCBI E-utilities)
 3) Europe PMC REST API
+4) Crossref REST API
+5) OpenAlex REST API (CC0, free)
 
 Returns a single merged, deduplicated, ranked list of papers.
 """
@@ -27,6 +29,7 @@ PUBMED_ESEARCH_API = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi
 PUBMED_EFETCH_API = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi"
 EUROPE_PMC_SEARCH_API = "https://www.ebi.ac.uk/europepmc/webservices/rest/search"
 CROSSREF_WORKS_API = "https://api.crossref.org/works"
+OPENALEX_WORKS_API = "https://api.openalex.org/works"
 
 FIELDS = "title,authors,abstract,url,year,citationCount,openAccessPdf"
 SOURCE_POOL_MULTIPLIER = 3
@@ -624,6 +627,128 @@ def fetch_crossref_papers(query: str, limit: int = 5) -> list[dict]:
     return all_papers[:target_pool]
 
 
+def _openalex_authors(authorships: list) -> str:
+    authors = []
+    for authorship in authorships:
+        author = authorship.get("author", {})
+        name = (author.get("display_name") or "").strip()
+        if name:
+            authors.append(name)
+
+    if not authors:
+        return "Unknown"
+    if len(authors) <= 3:
+        return ", ".join(authors)
+    return f"{authors[0]} et al."
+
+
+def _openalex_abstract(inverted_index: dict | None) -> str:
+    """Reconstruct abstract from OpenAlex inverted index format."""
+    if not inverted_index:
+        return ""
+    try:
+        word_positions: list[tuple[int, str]] = []
+        for word, positions in inverted_index.items():
+            for pos in positions:
+                word_positions.append((pos, word))
+        word_positions.sort(key=lambda x: x[0])
+        return " ".join(word for _, word in word_positions)
+    except Exception:
+        return ""
+
+
+def _openalex_year(work: dict) -> str:
+    year = work.get("publication_year")
+    return str(year) if year else "N/A"
+
+
+def _openalex_url(work: dict) -> str:
+    """Get the best available URL for an OpenAlex work."""
+    # Prefer open access URL
+    oa = work.get("open_access", {})
+    oa_url = (oa.get("oa_url") or "").strip()
+    if oa_url:
+        return oa_url
+
+    # Fall back to DOI
+    doi = (work.get("doi") or "").strip()
+    if doi:
+        return doi if doi.startswith("http") else f"https://doi.org/{doi}"
+
+    # Fall back to OpenAlex landing page
+    openalex_id = (work.get("id") or "").strip()
+    if openalex_id:
+        return openalex_id
+
+    return "https://openalex.org/"
+
+
+def fetch_openalex_papers(query: str, limit: int = 5) -> list[dict]:
+    """Fetch papers from OpenAlex REST API (free, CC0 data)."""
+    all_papers: list[dict] = []
+    candidates = _build_query_candidates(query)
+    target_pool = _source_pool_target(limit)
+    request_limit = min(100, max(target_pool, 20))
+
+    # OpenAlex polite pool: provide an email for faster rate limits
+    contact_email = (
+        os.getenv("OPENALEX_EMAIL")
+        or os.getenv("CROSSREF_EMAIL")
+        or os.getenv("OPENRESEARCH_CONTACT_EMAIL")
+        or ""
+    ).strip()
+
+    for candidate_query in candidates:
+        params = {
+            "search": candidate_query,
+            "per_page": request_limit,
+            "select": "id,doi,title,authorships,publication_year,cited_by_count,abstract_inverted_index,open_access,type",
+        }
+        if contact_email:
+            params["mailto"] = contact_email
+
+        try:
+            response = requests.get(OPENALEX_WORKS_API, params=params, timeout=20)
+            response.raise_for_status()
+            data = response.json()
+        except requests.RequestException as e:
+            print(f"❌ OpenAlex API error for query '{candidate_query}': {e}")
+            continue
+        except ValueError as e:
+            print(f"❌ OpenAlex JSON parse error for query '{candidate_query}': {e}")
+            continue
+
+        results = data.get("results", [])
+
+        for work in results:
+            abstract = _openalex_abstract(work.get("abstract_inverted_index"))
+            if not abstract:
+                continue
+
+            title = (work.get("title") or "Untitled").strip()
+            if _is_retracted(title, abstract):
+                continue
+
+            all_papers.append(
+                {
+                    "title": title,
+                    "authors": _openalex_authors(work.get("authorships", [])),
+                    "abstract": abstract,
+                    "url": _openalex_url(work),
+                    "year": _openalex_year(work),
+                    "citation_count": _safe_int(work.get("cited_by_count")),
+                    "source": "openalex",
+                }
+            )
+
+        all_papers = _dedupe_by_title(all_papers)
+        if len(all_papers) >= target_pool:
+            break
+
+    print(f"🔬 OpenAlex: fetched {len(all_papers)} papers")
+    return all_papers[:target_pool]
+
+
 def _merge_rank_dedupe(papers: list[dict], limit: int) -> list[dict]:
     ranked = sorted(papers, key=_rank_key, reverse=True)
     deduped = []
@@ -651,6 +776,7 @@ def _merge_rank_dedupe_with_query(papers: list[dict], limit: int, query: str) ->
         "pubmed": [],
         "europe_pmc": [],
         "crossref": [],
+        "openalex": [],
     }
     for paper in ranked:
         src = paper.get("source")
@@ -659,7 +785,7 @@ def _merge_rank_dedupe_with_query(papers: list[dict], limit: int, query: str) ->
 
     selected: list[dict] = []
     selected_titles: set[str] = set()
-    ordered_sources = ("semantic_scholar", "pubmed", "europe_pmc", "crossref")
+    ordered_sources = ("semantic_scholar", "pubmed", "europe_pmc", "crossref", "openalex")
 
     active_source_count = sum(1 for src in ordered_sources if by_source[src])
     per_source_seed = 2 if active_source_count > 0 and limit >= active_source_count * 2 else 1
@@ -694,16 +820,17 @@ def _merge_rank_dedupe_with_query(papers: list[dict], limit: int, query: str) ->
 
 def fetch_papers(query: str, limit: int = 5) -> tuple[list[dict], dict[str, int | bool]]:
     """
-    Fetch academic papers from Semantic Scholar, PubMed, Europe PMC, and Crossref in parallel,
-    then merge, dedupe, rank, and cap to the requested limit.
+    Fetch academic papers from Semantic Scholar, PubMed, Europe PMC, Crossref, and OpenAlex
+    in parallel, then merge, dedupe, rank, and cap to the requested limit.
     """
     source_limit = _source_pool_target(limit)
 
-    with ThreadPoolExecutor(max_workers=4) as executor:
+    with ThreadPoolExecutor(max_workers=5) as executor:
         semantic_future = executor.submit(fetch_semantic_papers, query, source_limit)
         pubmed_future = executor.submit(fetch_pubmed_papers, query, source_limit)
         europe_pmc_future = executor.submit(fetch_europe_pmc_papers, query, source_limit)
         crossref_future = executor.submit(fetch_crossref_papers, query, source_limit)
+        openalex_future = executor.submit(fetch_openalex_papers, query, source_limit)
 
         try:
             semantic_papers = semantic_future.result()
@@ -729,11 +856,17 @@ def fetch_papers(query: str, limit: int = 5) -> tuple[list[dict], dict[str, int 
             print(f"❌ Crossref pipeline error: {e}")
             crossref_papers = []
 
-    combined = semantic_papers + pubmed_papers + europe_pmc_papers + crossref_papers
+        try:
+            openalex_papers = openalex_future.result()
+        except Exception as e:
+            print(f"❌ OpenAlex pipeline error: {e}")
+            openalex_papers = []
+
+    combined = semantic_papers + pubmed_papers + europe_pmc_papers + crossref_papers + openalex_papers
     final_papers = _merge_rank_dedupe_with_query(combined, limit, query)
     sources_with_hits = sum(
         1
-        for count in (len(semantic_papers), len(pubmed_papers), len(europe_pmc_papers), len(crossref_papers))
+        for count in (len(semantic_papers), len(pubmed_papers), len(europe_pmc_papers), len(crossref_papers), len(openalex_papers))
         if count > 0
     )
     source_summary: dict[str, int | bool] = {
@@ -741,12 +874,15 @@ def fetch_papers(query: str, limit: int = 5) -> tuple[list[dict], dict[str, int 
         "pubmed": len(pubmed_papers),
         "europe_pmc": len(europe_pmc_papers),
         "crossref": len(crossref_papers),
+        "openalex": len(openalex_papers),
         "both_sources_used": sources_with_hits >= 2,
     }
 
     print(
         f"📚 Combined fetched {len(combined)} papers "
-        f"(Semantic Scholar={len(semantic_papers)}, PubMed={len(pubmed_papers)}, Europe PMC={len(europe_pmc_papers)}, Crossref={len(crossref_papers)}), "
+        f"(Semantic Scholar={len(semantic_papers)}, PubMed={len(pubmed_papers)}, "
+        f"Europe PMC={len(europe_pmc_papers)}, Crossref={len(crossref_papers)}, "
+        f"OpenAlex={len(openalex_papers)}), "
         f"returning {len(final_papers)}"
     )
     return final_papers, source_summary

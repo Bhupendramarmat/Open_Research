@@ -31,12 +31,7 @@ const TYPING_TEXTS = [
 
 const Index = () => {
   const [state, setState] = useState<AppState>("idle");
-  const [isDark, setIsDark] = useState(() => {
-    if (typeof window !== "undefined") {
-      return window.matchMedia("(prefers-color-scheme: dark)").matches;
-    }
-    return false;
-  });
+  const [isDark, setIsDark] = useState(false);
   const [answer, setAnswer] = useState<string>("");
   const [papers, setPapers] = useState<any[]>([]);
   const [sourceSummary, setSourceSummary] = useState<any | null>(null);
@@ -49,10 +44,8 @@ const Index = () => {
 
   // Initialize dark mode
   useEffect(() => {
-    if (isDark) {
-      document.documentElement.classList.add("dark");
-    }
-  }, []);
+    document.documentElement.classList.toggle("dark", isDark);
+  }, [isDark]);
 
   // Typing animation for hero
   useEffect(() => {

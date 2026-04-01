@@ -80,6 +80,7 @@ class SourceSummary(BaseModel):
     pubmed: int
     europe_pmc: int
     crossref: int
+    openalex: int
     both_sources_used: bool
 
 
@@ -143,6 +144,7 @@ async def search(request: SearchRequest):
                 pubmed=int(source_summary.get("pubmed", 0)),
                 europe_pmc=int(source_summary.get("europe_pmc", 0)),
                 crossref=int(source_summary.get("crossref", 0)),
+                openalex=int(source_summary.get("openalex", 0)),
                 both_sources_used=bool(source_summary.get("both_sources_used", False)),
             ),
         )

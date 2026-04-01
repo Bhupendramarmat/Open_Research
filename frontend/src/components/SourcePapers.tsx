@@ -16,6 +16,7 @@ export interface SourceSummary {
   pubmed: number;
   europe_pmc: number;
   crossref: number;
+  openalex: number;
   both_sources_used: boolean;
 }
 
@@ -24,6 +25,7 @@ const SOURCE_COLORS: Record<string, { bg: string; text: string }> = {
   pubmed: { bg: "hsla(185, 90%, 48%, 0.1)", text: "hsl(185, 90%, 48%)" },
   europe_pmc: { bg: "hsla(280, 75%, 55%, 0.1)", text: "hsl(280, 75%, 55%)" },
   crossref: { bg: "hsla(310, 70%, 55%, 0.1)", text: "hsl(310, 70%, 55%)" },
+  openalex: { bg: "hsla(28, 90%, 52%, 0.1)", text: "hsl(28, 90%, 52%)" },
 };
 
 const SOURCE_LABELS: Record<string, string> = {
@@ -31,6 +33,7 @@ const SOURCE_LABELS: Record<string, string> = {
   pubmed: "PubMed",
   europe_pmc: "Europe PMC",
   crossref: "Crossref",
+  openalex: "OpenAlex",
 };
 
 const PaperCard = ({ paper, index }: { paper: Paper; index: number }) => {
@@ -130,6 +133,7 @@ const SourcePapers = ({
             pubmed: sourceSummary.pubmed,
             europe_pmc: sourceSummary.europe_pmc,
             crossref: sourceSummary.crossref,
+            openalex: sourceSummary.openalex,
           })
             .filter(([, count]) => count > 0)
             .map(([source, count]) => {
