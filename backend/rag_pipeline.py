@@ -27,6 +27,7 @@ load_dotenv(dotenv_path=ENV_PATH)
 # ── Configuration ─────────────────────────────────────────────────────
 EMBEDDING_MODEL = "all-MiniLM-L6-v2"
 GEMINI_MODEL = "gemini-2.5-flash"
+QUERY_REFINER_MODEL = "gemini-1.5-flash"
 TOP_K = 6
 
 
@@ -99,6 +100,68 @@ def _extract_json_payload(raw_text: str) -> dict:
             return json.loads(match.group(0))
         except json.JSONDecodeError:
             return {}
+
+
+def refine_query(query: str) -> str:
+    """
+    Use Gemini to extract compact academic keywords from a long query.
+
+    Returns the original query if the refiner fails or no API key is configured.
+    """
+    clean_query = " ".join((query or "").split()).strip()
+    if not clean_query:
+        return query
+
+    api_key = os.getenv("GOOGLE_API_KEY")
+    if not api_key:
+        return query
+
+    if len(clean_query.split()) < 8 and len(clean_query) < 60:
+        return query
+
+    prompt = f"""Extract the 3 to 5 most important scientific keywords or short phrases from this query.
+Return ONLY valid JSON with this schema:
+{{"keywords": ["...", "...", "..."]}}
+
+Query:
+{clean_query}
+"""
+
+    llm = ChatGoogleGenerativeAI(
+        model=QUERY_REFINER_MODEL,
+        google_api_key=api_key,
+        temperature=0.2,
+        max_output_tokens=256,
+    )
+
+    try:
+        raw = llm.invoke(prompt).content
+    except Exception:
+        return query
+
+    payload = _extract_json_payload(raw)
+    keywords = payload.get("keywords", [])
+    if not isinstance(keywords, list):
+        return query
+
+    cleaned_keywords = []
+    seen = set()
+    for item in keywords:
+        if not isinstance(item, str):
+            continue
+        token = " ".join(item.split()).strip()
+        if not token:
+            continue
+        key = token.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        cleaned_keywords.append(token)
+
+    if not cleaned_keywords:
+        return query
+
+    return " ".join(cleaned_keywords[:5])
 
 
 def process_query(query: str, papers: list[dict]) -> tuple[str, list[str]]:

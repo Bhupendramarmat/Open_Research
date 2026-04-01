@@ -3,7 +3,7 @@ import { useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
-const AnswerDisplay = ({ answer }: { answer: string }) => {
+const AnswerDisplay = ({ answer, refinedQuery }: { answer: string; refinedQuery?: string }) => {
   const [copied, setCopied] = useState(false);
 
   const handleCopy = () => {
@@ -28,6 +28,11 @@ const AnswerDisplay = ({ answer }: { answer: string }) => {
               <Sparkles className="h-3 w-3" />
               AI-generated from cited papers
             </p>
+            {refinedQuery && (
+              <p className="text-[11px] sm:text-xs text-muted-foreground mt-1">
+                Searching for: <span className="text-foreground font-medium">{refinedQuery}</span>
+              </p>
+            )}
           </div>
         </div>
 

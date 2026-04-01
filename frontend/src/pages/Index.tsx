@@ -35,6 +35,8 @@ const Index = () => {
   const [answer, setAnswer] = useState<string>("");
   const [papers, setPapers] = useState<any[]>([]);
   const [sourceSummary, setSourceSummary] = useState<any | null>(null);
+  const [refinedQuery, setRefinedQuery] = useState<string>("");
+  const [pendingQuery, setPendingQuery] = useState<string>("");
   const [searchHistory, setSearchHistory] = useState<string[]>([]);
   const [numPapers, setNumPapers] = useState<number>(DEFAULT_NUM_PAPERS);
   const [yearRange, setYearRange] = useState<string>("2018-2025");
@@ -123,6 +125,8 @@ const Index = () => {
 
   const handleSearch = async (query: string) => {
     updateSearchHistory(query);
+    setPendingQuery(query);
+    setRefinedQuery("");
     setState("loading");
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), SEARCH_TIMEOUT_MS);
@@ -140,6 +144,7 @@ const Index = () => {
       setAnswer(data.answer);
       setPapers(data.papers);
       setSourceSummary(data.source_summary ?? null);
+      setRefinedQuery(data.refined_query ?? "");
       setState("results");
     } catch (err: any) {
       console.error(err);
@@ -222,6 +227,14 @@ const Index = () => {
         <div className="flex-1 min-w-0 space-y-4 sm:space-y-6">
           <SearchBar onSearch={handleSearch} isLoading={state === "loading"} />
 
+          {state === "loading" && (pendingQuery || refinedQuery) && (
+            <div className="max-w-2xl mx-auto text-center animate-fade-up">
+              <p className="text-xs sm:text-sm text-muted-foreground">
+                Refining query: <span className="text-foreground font-medium">{refinedQuery || pendingQuery}</span>
+              </p>
+            </div>
+          )}
+
           {searchHistory.length > 0 && (
             <div className="card-glass p-3 sm:p-4 max-w-2xl mx-auto animate-fade-up" id="search-history">
               <div className="flex items-center justify-between mb-3">
@@ -254,7 +267,7 @@ const Index = () => {
 
           {state === "results" && (
             <>
-              <AnswerDisplay answer={answer} />
+              <AnswerDisplay answer={answer} refinedQuery={refinedQuery} />
               <SourcePapers papers={papers} sourceSummary={sourceSummary} />
               {/* New search button */}
               <div className="text-center animate-fade-up">

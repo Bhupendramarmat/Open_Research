@@ -35,6 +35,9 @@ FIELDS = "title,authors,abstract,url,year,citationCount,openAccessPdf"
 SOURCE_POOL_MULTIPLIER = 3
 MIN_SOURCE_POOL = 30
 MAX_SOURCE_POOL = 90
+S2_MAX_RETRIES = 3
+S2_BACKOFF_BASE_SEC = 1.2
+S2_BACKOFF_MAX_SEC = 8.0
 
 # Global lock and state for Semantic Scholar rate limiting (1 request / second)
 _s2_lock = threading.Lock()
@@ -251,6 +254,53 @@ def fetch_semantic_papers(query: str, limit: int = 5) -> list[dict]:
     target_pool = _source_pool_target(limit)
     request_limit = min(100, max(target_pool, 20))
 
+    def _s2_request(params: dict) -> requests.Response:
+        last_error: Exception | None = None
+        for attempt in range(S2_MAX_RETRIES + 1):
+            try:
+                global _last_request_time
+                with _s2_lock:
+                    current_time = time.time()
+                    time_since_last = current_time - _last_request_time
+                    if time_since_last < 1.1:
+                        time.sleep(1.1 - time_since_last)
+
+                    _last_request_time = time.time()
+                    response = requests.get(SEMANTIC_SCHOLAR_API, headers=headers, params=params, timeout=15)
+
+                if response.status_code in {429, 500, 502, 503, 504}:
+                    retry_after = response.headers.get("Retry-After")
+                    if retry_after:
+                        try:
+                            sleep_for = float(retry_after)
+                        except ValueError:
+                            sleep_for = S2_BACKOFF_BASE_SEC * (2 ** attempt)
+                    else:
+                        sleep_for = S2_BACKOFF_BASE_SEC * (2 ** attempt)
+
+                    sleep_for = min(sleep_for, S2_BACKOFF_MAX_SEC)
+                    print(
+                        f"⏳ Semantic Scholar retry {attempt + 1}/{S2_MAX_RETRIES + 1} "
+                        f"after {sleep_for:.1f}s (status {response.status_code})."
+                    )
+                    time.sleep(sleep_for)
+                    continue
+
+                response.raise_for_status()
+                return response
+            except requests.RequestException as e:
+                last_error = e
+                sleep_for = min(S2_BACKOFF_BASE_SEC * (2 ** attempt), S2_BACKOFF_MAX_SEC)
+                print(
+                    f"⏳ Semantic Scholar retry {attempt + 1}/{S2_MAX_RETRIES + 1} "
+                    f"after {sleep_for:.1f}s (network error)."
+                )
+                time.sleep(sleep_for)
+
+        if last_error:
+            raise last_error
+        raise requests.RequestException("Semantic Scholar request failed")
+
     for candidate_query in candidates:
         params = {
             "query": candidate_query,
@@ -259,17 +309,7 @@ def fetch_semantic_papers(query: str, limit: int = 5) -> list[dict]:
         }
 
         try:
-            global _last_request_time
-            with _s2_lock:
-                current_time = time.time()
-                time_since_last = current_time - _last_request_time
-                if time_since_last < 1.05:
-                    time.sleep(1.05 - time_since_last)
-
-                _last_request_time = time.time()
-                response = requests.get(SEMANTIC_SCHOLAR_API, headers=headers, params=params, timeout=15)
-
-            response.raise_for_status()
+            response = _s2_request(params)
         except requests.RequestException as e:
             print(f"❌ Semantic Scholar API error for query '{candidate_query}': {e}")
             continue

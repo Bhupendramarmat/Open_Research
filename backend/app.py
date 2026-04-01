@@ -17,11 +17,11 @@ from pydantic import BaseModel, Field
 
 try:
     from backend.fetcher import fetch_papers
-    from backend.rag_pipeline import process_query
+    from backend.rag_pipeline import process_query, refine_query
 except ModuleNotFoundError:
     # Fallback for running from the backend/ directory.
     from fetcher import fetch_papers
-    from rag_pipeline import process_query
+    from rag_pipeline import process_query, refine_query
 
 # ── Load environment variables ────────────────────────────────────────
 ENV_PATH = Path(__file__).resolve().parent / ".env"
@@ -88,6 +88,7 @@ class SearchResponse(BaseModel):
     answer: str
     papers: list[PaperResponse]
     query: str
+    refined_query: str
     source_summary: SourceSummary
 
 
@@ -111,8 +112,9 @@ async def search(request: SearchRequest):
     3. Returns the AI-synthesized answer + source papers
     """
     try:
+        refined_query = refine_query(request.query)
         papers, source_summary = fetch_papers(
-            query=request.query,
+            query=refined_query,
             limit=request.num_papers,
         )
 
@@ -139,6 +141,7 @@ async def search(request: SearchRequest):
                 for idx, p in enumerate(papers)
             ],
             query=request.query,
+            refined_query=refined_query,
             source_summary=SourceSummary(
                 semantic_scholar=int(source_summary.get("semantic_scholar", 0)),
                 pubmed=int(source_summary.get("pubmed", 0)),
