@@ -1,25 +1,18 @@
 import { useState } from "react";
 import { Search, ArrowRight, Loader2, Sparkles } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 interface SearchBarProps {
   onSearch: (query: string) => void;
   isLoading: boolean;
+  className?: string;
 }
 
-const SearchBar = ({ onSearch, isLoading }: SearchBarProps) => {
+const COMING_SOON_FILTERS = ["Pro", "Deep", "Corpus", "Sources", "Filter"] as const;
+
+const SearchBar = ({ onSearch, isLoading, className }: SearchBarProps) => {
   const [query, setQuery] = useState("");
   const [isFocused, setIsFocused] = useState(false);
-  const [filters, setFilters] = useState({
-    pro: false,
-    deep: true,
-    corpus: true,
-    sources: false,
-    filter: false,
-  });
-
-  const toggleFilter = (key: keyof typeof filters) => {
-    setFilters((prev) => ({ ...prev, [key]: !prev[key] }));
-  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -27,7 +20,7 @@ const SearchBar = ({ onSearch, isLoading }: SearchBarProps) => {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="w-full max-w-2xl mx-auto animate-slide-up-elastic delay-200">
+    <form onSubmit={handleSubmit} className={cn("w-full max-w-2xl mx-auto animate-slide-up-elastic delay-200", className)}>
       <div className={`search-ring ${isFocused ? "focused" : ""}`}>
         <div
           className={`
@@ -78,46 +71,15 @@ const SearchBar = ({ onSearch, isLoading }: SearchBarProps) => {
           </div>
           <div className="mt-2 px-2 sm:px-3 pb-2">
             <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
-              <button
-                type="button"
-                className="filter-pill"
-                data-active={filters.pro}
-                onClick={() => toggleFilter("pro")}
-              >
-                Pro
-              </button>
-              <button
-                type="button"
-                className="filter-pill"
-                data-active={filters.deep}
-                onClick={() => toggleFilter("deep")}
-              >
-                Deep
-              </button>
-              <button
-                type="button"
-                className="filter-pill"
-                data-active={filters.corpus}
-                onClick={() => toggleFilter("corpus")}
-              >
-                Corpus
-              </button>
-              <button
-                type="button"
-                className="filter-pill"
-                data-active={filters.sources}
-                onClick={() => toggleFilter("sources")}
-              >
-                Sources
-              </button>
-              <button
-                type="button"
-                className="filter-pill"
-                data-active={filters.filter}
-                onClick={() => toggleFilter("filter")}
-              >
-                Filter
-              </button>
+              {COMING_SOON_FILTERS.map((label) => (
+                <span
+                  key={label}
+                  className="filter-pill opacity-50 cursor-default"
+                  title="Coming soon"
+                >
+                  {label}
+                </span>
+              ))}
             </div>
           </div>
         </div>

@@ -1,5 +1,6 @@
 import { ExternalLink, Calendar, Quote, ChevronDown, ChevronUp } from "lucide-react";
 import { useState } from "react";
+import { cn } from "@/lib/utils";
 
 export interface Paper {
   title: string;
@@ -102,73 +103,39 @@ const PaperCard = ({ paper, index }: { paper: Paper; index: number }) => {
 const SourcePapers = ({
   papers,
   sourceSummary,
+  className,
+  hideHeader = false,
 }: {
   papers: Paper[];
   sourceSummary: SourceSummary | null;
+  className?: string;
+  hideHeader?: boolean;
 }) => {
-  const [showAll, setShowAll] = useState(false);
-  const visiblePapers = showAll ? papers : papers.slice(0, 8);
-
   return (
-    <div className="card-elevated p-4 sm:p-6 md:p-8 max-w-2xl mx-auto animate-slide-up-elastic delay-100" id="source-papers">
+    <div className={cn("card-elevated p-4 sm:p-6 md:p-8 max-w-2xl mx-auto animate-slide-up-elastic delay-100", className)} id="source-papers">
       {/* Header */}
-      <div className="flex items-center gap-3 mb-5">
-        <div className="w-9 h-9 rounded-xl flex items-center justify-center"
-             style={{ background: "var(--gradient-subtle)" }}>
-          <Quote className="h-4 w-4 text-primary" />
-        </div>
-        <div className="flex-1">
-          <h3 className="text-base sm:text-lg font-semibold text-foreground tracking-tight">Source Papers</h3>
-        </div>
-        <span className="text-xs text-muted-foreground font-medium px-2.5 py-1 rounded-full"
-              style={{ background: "var(--gradient-subtle)" }}>
-          {papers.length} papers
-        </span>
-      </div>
-
-      {sourceSummary && (
-        <div className="mb-4 sm:mb-5 flex flex-wrap gap-1.5 sm:gap-2">
-          {Object.entries({
-            semantic_scholar: sourceSummary.semantic_scholar,
-            pubmed: sourceSummary.pubmed,
-            europe_pmc: sourceSummary.europe_pmc,
-            crossref: sourceSummary.crossref,
-            openalex: sourceSummary.openalex,
-          })
-            .filter(([, count]) => count > 0)
-            .map(([source, count]) => {
-              const style = SOURCE_COLORS[source];
-              return (
-                <span
-                  key={source}
-                  className="text-xs font-medium px-2.5 py-1 rounded-full"
-                  style={{ background: style?.bg, color: style?.text }}
-                >
-                  {SOURCE_LABELS[source]} · {count}
-                </span>
-              );
-            })}
+      {!hideHeader && (
+        <div className="flex items-center gap-3 mb-5">
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center"
+               style={{ background: "var(--gradient-subtle)" }}>
+            <Quote className="h-4 w-4 text-primary" />
+          </div>
+          <div className="flex-1">
+            <h3 className="text-base sm:text-lg font-semibold text-foreground tracking-tight">Source Papers</h3>
+          </div>
+          <span className="text-xs text-muted-foreground font-medium px-2.5 py-1 rounded-full"
+                style={{ background: "var(--gradient-subtle)" }}>
+            {papers.length} papers
+          </span>
         </div>
       )}
 
       {/* Papers list */}
       <div className="space-y-1">
-        {visiblePapers.map((paper, i) => (
-          <PaperCard key={i} paper={paper} index={i} />
+        {papers.map((paper, i) => (
+          <PaperCard key={paper.url || paper.title || i} paper={paper} index={i} />
         ))}
       </div>
-
-      {/* Show more/less */}
-      {papers.length > 8 && (
-        <div className="mt-4 text-center">
-          <button
-            onClick={() => setShowAll(!showAll)}
-            className="text-sm text-primary hover:text-primary/80 font-medium transition-colors px-4 py-2 rounded-lg hover:bg-accent"
-          >
-            {showAll ? `Show less` : `Show all ${papers.length} papers`}
-          </button>
-        </div>
-      )}
     </div>
   );
 };

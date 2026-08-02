@@ -1,10 +1,6 @@
-// API configuration - points to backend server
-const localHostnames = new Set(["localhost", "127.0.0.1"]);
-const hostname = typeof window !== "undefined" ? window.location.hostname : "";
-
-export const API_BASE_URL =
-  import.meta.env.VITE_API_URL ||
-  (localHostnames.has(hostname) ? "http://localhost:8000" : "");
+// API configuration — uses the Vite dev-server proxy (/api -> localhost:8000)
+// so that all requests stay same-origin, avoiding CORS issues.
+export const API_BASE_URL = import.meta.env.VITE_API_URL || "";
 
 export const API_ENDPOINTS = {
   SEARCH: `${API_BASE_URL}/api/search`,

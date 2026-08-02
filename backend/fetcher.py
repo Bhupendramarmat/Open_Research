@@ -11,6 +11,7 @@ Fetches papers in parallel from:
 Returns a single merged, deduplicated, ranked list of papers.
 """
 
+import logging
 import os
 import re
 from pathlib import Path
@@ -20,8 +21,11 @@ import xml.etree.ElementTree as ET
 from html import unescape
 from concurrent.futures import ThreadPoolExecutor
 from collections import Counter
+from functools import lru_cache
 
 import requests
+
+logger = logging.getLogger("openresearch.fetcher")
 
 # ── Constants ─────────────────────────────────────────────────────────
 SEMANTIC_SCHOLAR_API = "https://api.semanticscholar.org/graph/v1/paper/search"
@@ -109,7 +113,8 @@ def _normalize_query_text(text: str) -> str:
     return " ".join(normalized.split())
 
 
-def _extract_query_terms(query: str) -> list[str]:
+@lru_cache(maxsize=64)
+def _extract_query_terms(query: str) -> tuple[str, ...]:
     normalized = _normalize_query_text(query).lower()
     terms = []
     for token in re.findall(r"[a-z0-9]+", normalized):
@@ -118,14 +123,13 @@ def _extract_query_terms(query: str) -> list[str]:
             continue
         if len(token) >= 3 and token not in _STOPWORDS:
             terms.append(token)
-    return list(dict.fromkeys(terms))
+    return tuple(dict.fromkeys(terms))
 
 
 def _paper_relevance_score(paper: dict, query: str) -> int:
     query_terms = _extract_query_terms(query)
     title_text = _normalize_query_text(paper.get("title", "")).lower()
     abstract_text = _normalize_query_text(paper.get("abstract", "")).lower()
-    haystack = f"{title_text} {abstract_text}"
 
     score = 0
     normalized_query = _normalize_query_text(query).lower()
@@ -181,10 +185,11 @@ def _sort_key_with_query(paper: dict, query: str) -> tuple[int, int, int]:
     )
 
 
-def _build_query_candidates(query: str) -> list[str]:
+@lru_cache(maxsize=64)
+def _build_query_candidates(query: str) -> tuple[str, ...]:
     base = _normalize_query_text(" ".join((query or "").split()).strip())
     if not base:
-        return []
+        return tuple()
 
     candidates: list[str] = [base]
 
@@ -228,9 +233,7 @@ def _build_query_candidates(query: str) -> list[str]:
         if keyword_query and keyword_query.lower() not in [c.lower() for c in candidates]:
             candidates.append(keyword_query)
 
-    lowered_candidates = " ".join(candidates).lower()
-    if ("nabh" in lowered_candidates or "jci" in lowered_candidates) and "accreditation" not in lowered_candidates:
-        candidates.append("hospital accreditation quality outcomes medical tourism india")
+
 
     unique_candidates = []
     seen_candidates = set()
@@ -241,7 +244,7 @@ def _build_query_candidates(query: str) -> list[str]:
         seen_candidates.add(key)
         unique_candidates.append(candidate)
 
-    return unique_candidates[:4]
+    return tuple(unique_candidates[:4])
 
 
 def _dedupe_by_title(papers: list[dict]) -> list[dict]:
@@ -290,6 +293,7 @@ def fetch_semantic_papers(query: str, limit: int = 5) -> list[dict]:
     def _s2_request(params: dict) -> requests.Response:
         last_error: Exception | None = None
         for attempt in range(S2_MAX_RETRIES + 1):
+            is_last_attempt = attempt >= S2_MAX_RETRIES
             try:
                 global _last_request_time
                 with _s2_lock:
@@ -302,6 +306,9 @@ def fetch_semantic_papers(query: str, limit: int = 5) -> list[dict]:
                     response = requests.get(SEMANTIC_SCHOLAR_API, headers=headers, params=params, timeout=15)
 
                 if response.status_code in {429, 500, 502, 503, 504}:
+                    if is_last_attempt:
+                        response.raise_for_status()
+
                     retry_after = response.headers.get("Retry-After")
                     if retry_after:
                         try:
@@ -312,9 +319,9 @@ def fetch_semantic_papers(query: str, limit: int = 5) -> list[dict]:
                         sleep_for = S2_BACKOFF_BASE_SEC * (2 ** attempt)
 
                     sleep_for = min(sleep_for, S2_BACKOFF_MAX_SEC)
-                    print(
-                        f"⏳ Semantic Scholar retry {attempt + 1}/{S2_MAX_RETRIES + 1} "
-                        f"after {sleep_for:.1f}s (status {response.status_code})."
+                    logger.info(
+                        "Semantic Scholar retry %d/%d after %.1fs (status %d).",
+                        attempt + 1, S2_MAX_RETRIES + 1, sleep_for, response.status_code,
                     )
                     time.sleep(sleep_for)
                     continue
@@ -323,10 +330,13 @@ def fetch_semantic_papers(query: str, limit: int = 5) -> list[dict]:
                 return response
             except requests.RequestException as e:
                 last_error = e
+                if is_last_attempt:
+                    break
+
                 sleep_for = min(S2_BACKOFF_BASE_SEC * (2 ** attempt), S2_BACKOFF_MAX_SEC)
-                print(
-                    f"⏳ Semantic Scholar retry {attempt + 1}/{S2_MAX_RETRIES + 1} "
-                    f"after {sleep_for:.1f}s (network error)."
+                logger.info(
+                    "Semantic Scholar retry %d/%d after %.1fs (network error).",
+                    attempt + 1, S2_MAX_RETRIES + 1, sleep_for,
                 )
                 time.sleep(sleep_for)
 
@@ -344,7 +354,10 @@ def fetch_semantic_papers(query: str, limit: int = 5) -> list[dict]:
         try:
             response = _s2_request(params)
         except requests.RequestException as e:
-            print(f"❌ Semantic Scholar API error for query '{candidate_query}': {e}")
+            logger.error("Semantic Scholar API error for query '%s': %s", candidate_query, e)
+            # When hard rate-limited, avoid spending more time on alternate query variants.
+            if isinstance(e, requests.HTTPError) and e.response is not None and e.response.status_code == 429:
+                break
             continue
 
         data = response.json()
@@ -386,7 +399,7 @@ def fetch_semantic_papers(query: str, limit: int = 5) -> list[dict]:
         if len(all_papers) >= target_pool:
             break
 
-    print(f"📚 Semantic Scholar: fetched {len(all_papers)} papers")
+    logger.info("Semantic Scholar: fetched %d papers", len(all_papers))
     return all_papers[:target_pool]
 
 
@@ -465,7 +478,7 @@ def fetch_pubmed_papers(query: str, limit: int = 5) -> list[dict]:
             search_res.raise_for_status()
             id_list = search_res.json().get("esearchresult", {}).get("idlist", [])
         except requests.RequestException as e:
-            print(f"❌ PubMed search API error for query '{candidate_query}': {e}")
+            logger.error("PubMed search API error for query '%s': %s", candidate_query, e)
             continue
 
         if not id_list:
@@ -485,10 +498,10 @@ def fetch_pubmed_papers(query: str, limit: int = 5) -> list[dict]:
             fetch_res.raise_for_status()
             root = ET.fromstring(fetch_res.content)
         except requests.RequestException as e:
-            print(f"❌ PubMed fetch API error for query '{candidate_query}': {e}")
+            logger.error("PubMed fetch API error for query '%s': %s", candidate_query, e)
             continue
         except ET.ParseError as e:
-            print(f"❌ PubMed XML parse error for query '{candidate_query}': {e}")
+            logger.error("PubMed XML parse error for query '%s': %s", candidate_query, e)
             continue
 
         for article in root.findall(".//PubmedArticle"):
@@ -519,7 +532,7 @@ def fetch_pubmed_papers(query: str, limit: int = 5) -> list[dict]:
         if len(all_papers) >= target_pool:
             break
 
-    print(f"🧪 PubMed: fetched {len(all_papers)} papers")
+    logger.info("PubMed: fetched %d papers", len(all_papers))
     return all_papers[:target_pool]
 
 
@@ -555,10 +568,10 @@ def fetch_europe_pmc_papers(query: str, limit: int = 5) -> list[dict]:
             response.raise_for_status()
             data = response.json()
         except requests.RequestException as e:
-            print(f"❌ Europe PMC API error for query '{candidate_query}': {e}")
+            logger.error("Europe PMC API error for query '%s': %s", candidate_query, e)
             continue
         except ValueError as e:
-            print(f"❌ Europe PMC JSON parse error for query '{candidate_query}': {e}")
+            logger.error("Europe PMC JSON parse error for query '%s': %s", candidate_query, e)
             continue
 
         records = data.get("resultList", {}).get("result", [])
@@ -592,7 +605,7 @@ def fetch_europe_pmc_papers(query: str, limit: int = 5) -> list[dict]:
         if len(all_papers) >= target_pool:
             break
 
-    print(f"🌍 Europe PMC: fetched {len(all_papers)} papers")
+    logger.info("Europe PMC: fetched %d papers", len(all_papers))
     return all_papers[:target_pool]
 
 
@@ -657,10 +670,10 @@ def fetch_crossref_papers(query: str, limit: int = 5) -> list[dict]:
             response.raise_for_status()
             data = response.json()
         except requests.RequestException as e:
-            print(f"❌ Crossref API error for query '{candidate_query}': {e}")
+            logger.error("Crossref API error for query '%s': %s", candidate_query, e)
             continue
         except ValueError as e:
-            print(f"❌ Crossref JSON parse error for query '{candidate_query}': {e}")
+            logger.error("Crossref JSON parse error for query '%s': %s", candidate_query, e)
             continue
 
         items = data.get("message", {}).get("items", [])
@@ -696,7 +709,7 @@ def fetch_crossref_papers(query: str, limit: int = 5) -> list[dict]:
         if len(all_papers) >= target_pool:
             break
 
-    print(f"🧷 Crossref: fetched {len(all_papers)} papers")
+    logger.info("Crossref: fetched %d papers", len(all_papers))
     return all_papers[:target_pool]
 
 
@@ -785,10 +798,10 @@ def fetch_openalex_papers(query: str, limit: int = 5) -> list[dict]:
             response.raise_for_status()
             data = response.json()
         except requests.RequestException as e:
-            print(f"❌ OpenAlex API error for query '{candidate_query}': {e}")
+            logger.error("OpenAlex API error for query '%s': %s", candidate_query, e)
             continue
         except ValueError as e:
-            print(f"❌ OpenAlex JSON parse error for query '{candidate_query}': {e}")
+            logger.error("OpenAlex JSON parse error for query '%s': %s", candidate_query, e)
             continue
 
         results = data.get("results", [])
@@ -818,7 +831,7 @@ def fetch_openalex_papers(query: str, limit: int = 5) -> list[dict]:
         if len(all_papers) >= target_pool:
             break
 
-    print(f"🔬 OpenAlex: fetched {len(all_papers)} papers")
+    logger.info("OpenAlex: fetched %d papers", len(all_papers))
     return all_papers[:target_pool]
 
 
@@ -896,43 +909,42 @@ def fetch_papers(query: str, limit: int = 5) -> tuple[list[dict], dict[str, int 
     Fetch academic papers from Semantic Scholar, PubMed, Europe PMC, Crossref, and OpenAlex
     in parallel, then merge, dedupe, rank, and cap to the requested limit.
     """
-    source_limit = _source_pool_target(limit)
-
     with ThreadPoolExecutor(max_workers=5) as executor:
-        semantic_future = executor.submit(fetch_semantic_papers, query, source_limit)
-        pubmed_future = executor.submit(fetch_pubmed_papers, query, source_limit)
-        europe_pmc_future = executor.submit(fetch_europe_pmc_papers, query, source_limit)
-        crossref_future = executor.submit(fetch_crossref_papers, query, source_limit)
-        openalex_future = executor.submit(fetch_openalex_papers, query, source_limit)
+        # Pass requested limit directly. Each source function already computes its own pool target.
+        semantic_future = executor.submit(fetch_semantic_papers, query, limit)
+        pubmed_future = executor.submit(fetch_pubmed_papers, query, limit)
+        europe_pmc_future = executor.submit(fetch_europe_pmc_papers, query, limit)
+        crossref_future = executor.submit(fetch_crossref_papers, query, limit)
+        openalex_future = executor.submit(fetch_openalex_papers, query, limit)
 
         try:
             semantic_papers = semantic_future.result()
         except Exception as e:
-            print(f"❌ Semantic Scholar pipeline error: {e}")
+            logger.error("Semantic Scholar pipeline error: %s", e)
             semantic_papers = []
 
         try:
             pubmed_papers = pubmed_future.result()
         except Exception as e:
-            print(f"❌ PubMed pipeline error: {e}")
+            logger.error("PubMed pipeline error: %s", e)
             pubmed_papers = []
 
         try:
             europe_pmc_papers = europe_pmc_future.result()
         except Exception as e:
-            print(f"❌ Europe PMC pipeline error: {e}")
+            logger.error("Europe PMC pipeline error: %s", e)
             europe_pmc_papers = []
 
         try:
             crossref_papers = crossref_future.result()
         except Exception as e:
-            print(f"❌ Crossref pipeline error: {e}")
+            logger.error("Crossref pipeline error: %s", e)
             crossref_papers = []
 
         try:
             openalex_papers = openalex_future.result()
         except Exception as e:
-            print(f"❌ OpenAlex pipeline error: {e}")
+            logger.error("OpenAlex pipeline error: %s", e)
             openalex_papers = []
 
     combined = semantic_papers + pubmed_papers + europe_pmc_papers + crossref_papers + openalex_papers
@@ -951,12 +963,11 @@ def fetch_papers(query: str, limit: int = 5) -> tuple[list[dict], dict[str, int 
         "both_sources_used": sources_with_hits >= 2,
     }
 
-    print(
-        f"📚 Combined fetched {len(combined)} papers "
-        f"(Semantic Scholar={len(semantic_papers)}, PubMed={len(pubmed_papers)}, "
-        f"Europe PMC={len(europe_pmc_papers)}, Crossref={len(crossref_papers)}, "
-        f"OpenAlex={len(openalex_papers)}), "
-        f"returning {len(final_papers)}"
+    logger.info(
+        "Combined fetched %d papers (Semantic Scholar=%d, PubMed=%d, Europe PMC=%d, Crossref=%d, OpenAlex=%d), returning %d",
+        len(combined), len(semantic_papers), len(pubmed_papers),
+        len(europe_pmc_papers), len(crossref_papers), len(openalex_papers),
+        len(final_papers),
     )
     return final_papers, source_summary
 

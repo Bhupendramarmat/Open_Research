@@ -9,11 +9,14 @@ load_dotenv(dotenv_path=ENV_PATH)
 api_key = os.getenv("GOOGLE_API_KEY")
 
 models_to_test = [
-    "gemini-1.5-flash",
-    "models/gemini-1.5-flash",
-    "gemini-1.5-flash-001",
-    "gemini-1.5-pro",
-    "gemini-pro",
+    os.getenv("GEMINI_MODEL", "gemini-2.5-flash"),
+    "gemini-2.5-flash",
+    "gemini-flash-latest",
+    "gemini-2.5-flash-lite",
+    "gemini-pro-latest",
+    "gemini-2.5-pro",
+    "gemini-2.0-flash",
+    "gemini-2.0-flash-lite",
 ]
 
 for m in models_to_test:

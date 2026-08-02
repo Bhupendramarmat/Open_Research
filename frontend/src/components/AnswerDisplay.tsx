@@ -2,8 +2,17 @@ import { Lightbulb, Copy, Check, Sparkles } from "lucide-react";
 import { useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { cn } from "@/lib/utils";
 
-const AnswerDisplay = ({ answer, refinedQuery }: { answer: string; refinedQuery?: string }) => {
+const AnswerDisplay = ({
+  answer,
+  refinedQuery,
+  className,
+}: {
+  answer: string;
+  refinedQuery?: string;
+  className?: string;
+}) => {
   const [copied, setCopied] = useState(false);
 
   const handleCopy = () => {
@@ -14,7 +23,7 @@ const AnswerDisplay = ({ answer, refinedQuery }: { answer: string; refinedQuery?
   };
 
   return (
-    <div className="card-elevated p-4 sm:p-6 md:p-8 max-w-2xl mx-auto animate-slide-up-elastic" id="answer-display">
+    <div className={cn("card-elevated p-4 sm:p-6 md:p-8 max-w-2xl mx-auto animate-slide-up-elastic", className)} id="answer-display">
       {/* Header */}
       <div className="flex items-start sm:items-center justify-between mb-4 sm:mb-5 gap-2">
         <div className="flex items-center gap-3">

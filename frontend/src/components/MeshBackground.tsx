@@ -10,6 +10,7 @@ const MeshBackground = () => {
     if (!ctx) return;
 
     let animationId: number;
+    let isVisible = !document.hidden;
     let particles: Array<{
       x: number;
       y: number;
@@ -27,6 +28,16 @@ const MeshBackground = () => {
     resize();
     window.addEventListener("resize", resize);
 
+    const handleVisibilityChange = () => {
+      isVisible = !document.hidden;
+      if (isVisible) {
+        animationId = requestAnimationFrame(draw);
+      } else {
+        cancelAnimationFrame(animationId);
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
     // Create particles
     const PARTICLE_COUNT = 28;
     for (let i = 0; i < PARTICLE_COUNT; i++) {
@@ -42,6 +53,8 @@ const MeshBackground = () => {
     }
 
     const draw = () => {
+      if (!isVisible) return;
+
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
       // Update and draw particles
@@ -86,6 +99,7 @@ const MeshBackground = () => {
 
     return () => {
       window.removeEventListener("resize", resize);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
       cancelAnimationFrame(animationId);
     };
   }, []);
